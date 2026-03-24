@@ -1,78 +1,108 @@
-import { getStore } from "@netlify/blobs";
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>Fairway Photos</title>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;600;700&display=swap" rel="stylesheet"/>
+  <style>
+    *{margin:0;padding:0;box-sizing:border-box;}
+    body{font-family:'DM Sans',system-ui,sans-serif;background:#F2F2EF;color:#3A3A35;padding:24px;}
+    h1{font-size:22px;margin-bottom:8px;}
+    .back{display:inline-block;margin-bottom:16px;color:#2980B9;text-decoration:none;font-size:14px;font-weight:600;}
+    .filters{display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap;}
+    .filters select,.filters input{padding:8px 12px;border:2px solid #D1D1CB;border-radius:8px;font-family:'DM Sans',system-ui,sans-serif;font-size:14px;background:white;}
+    .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:16px;}
+    .card{background:white;border-radius:12px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.08);}
+    .card img{width:100%;height:180px;object-fit:cover;cursor:pointer;}
+    .card .info{padding:12px;font-size:14px;line-height:1.5;}
+    .card .name{font-weight:700;word-break:break-all;font-size:13px;}
+    .card .detail{color:#8A8A82;font-size:13px;}
+    .card .delete-btn{display:block;width:100%;padding:8px;border:none;background:#FDECEA;color:#C0392B;font-family:'DM Sans',system-ui,sans-serif;font-size:13px;font-weight:600;cursor:pointer;border-top:1px solid #eee;}
+    .card .delete-btn:hover{background:#C0392B;color:white;}
+    .empty{text-align:center;padding:60px;color:#8A8A82;font-size:16px;}
+    .loading{text-align:center;padding:60px;color:#8A8A82;}
+    .count{font-size:14px;color:#8A8A82;margin-bottom:12px;}
+  </style>
+</head>
+<body>
+  <h1>🏘️ Fairway Walkthrough Photos</h1>
+  <a href="/" class="back">← Back to Logger</a>
+  <div class="filters">
+    <input type="text" id="filter-address" placeholder="Filter by address..." />
+    <select id="filter-category"><option value="">All categories</option></select>
+    <select id="filter-reviewer"><option value="">All reviewers</option></select>
+  </div>
+  <div id="count" class="count"></div>
+  <div id="content" class="loading">Loading photos…</div>
+  <script>
+    let allPhotos = [];
+    const filterAddr = document.getElementById("filter-address");
+    const filterCat = document.getElementById("filter-category");
+    const filterRev = document.getElementById("filter-reviewer");
 
-export default async (req, context) => {
-  if (req.method === "GET") {
-    const url = new URL(req.url);
-    const key = url.searchParams.get("key");
-    const store = getStore("photos");
-    const metaStore = getStore("photo-meta");
+    async function load(){
+      const el=document.getElementById("content");
+      try{
+        const resp=await fetch("/api/photos");
+        const data=await resp.json();
+        if(!data.photos||data.photos.length===0){el.className="empty";el.textContent="No photos uploaded yet.";return;}
+        allPhotos = data.photos.sort((a,b)=>(b.timestamp||"").localeCompare(a.timestamp||""));
 
-    if (key) {
-      const blob = await store.get(key, { type: "arrayBuffer" });
-      if (!blob) return new Response("Not found", { status: 404 });
-      let mime = "image/jpeg";
-      try {
-        const m = await metaStore.get(key, { type: "json" });
-        if (m && m.mimeType) mime = m.mimeType;
-      } catch (e) {}
-      return new Response(blob, { headers: { "Content-Type": mime, "Cache-Control": "public, max-age=86400" } });
+        // Populate filter dropdowns
+        const cats = [...new Set(allPhotos.map(p=>p.category).filter(Boolean))];
+        const revs = [...new Set(allPhotos.map(p=>p.reviewer).filter(Boolean))];
+        cats.forEach(c=>{const o=document.createElement("option");o.value=c;o.textContent=c;filterCat.appendChild(o);});
+        revs.forEach(r=>{const o=document.createElement("option");o.value=r;o.textContent=r;filterRev.appendChild(o);});
+
+        // Check URL params for pre-filtering
+        const params = new URLSearchParams(window.location.search);
+        if(params.get("address")) filterAddr.value = params.get("address");
+        if(params.get("category")) filterCat.value = params.get("category");
+        if(params.get("reviewer")) filterRev.value = params.get("reviewer");
+
+        render();
+      }catch(e){el.className="empty";el.textContent="Error loading photos: "+e.message;}
     }
 
-    const { blobs } = await metaStore.list();
-    const photos = [];
-    for (const b of blobs) {
-      try {
-        const m = await metaStore.get(b.key, { type: "json" });
-        photos.push({ key: b.key, ...m });
-      } catch (e) {}
-    }
-    return new Response(JSON.stringify({ photos }), { headers: { "Content-Type": "application/json" } });
-  }
-
-  if (req.method === "POST") {
-    try {
-      const body = await req.json();
-      const { photoName, fileBase64, fileMimeType, address, bldgNumber, category, description, reviewer, timestamp } = body;
-      if (!fileBase64 || !photoName) {
-        return new Response(JSON.stringify({ error: "Missing fileBase64 or photoName" }), { status: 400, headers: { "Content-Type": "application/json" } });
-      }
-      const binary = Uint8Array.from(atob(fileBase64), c => c.charCodeAt(0));
-      const store = getStore("photos");
-      await store.set(photoName, binary);
-      const photoUrl = "https://fairway-walkthrough.netlify.app/api/photos?key=" + encodeURIComponent(photoName);
-      const metaStore = getStore("photo-meta");
-      await metaStore.setJSON(photoName, {
-        photoName, mimeType: fileMimeType || "image/jpeg",
-        address: address || "", bldgNumber: bldgNumber || "",
-        category: category || "", description: description || "",
-        reviewer: reviewer || "", timestamp: timestamp || new Date().toISOString(),
-        url: photoUrl
+    function render(){
+      const el=document.getElementById("content");
+      const addr=filterAddr.value.toLowerCase();
+      const cat=filterCat.value;
+      const rev=filterRev.value;
+      const filtered = allPhotos.filter(p=>{
+        if(addr && !(p.address||"").toLowerCase().includes(addr) && !(p.bldgNumber||"").toLowerCase().includes(addr)) return false;
+        if(cat && p.category!==cat) return false;
+        if(rev && p.reviewer!==rev) return false;
+        return true;
       });
-
-      // Send metadata + photo URL to Make webhook for Google Sheets logging
-      const makeWebhookUrl = Netlify.env.get("MAKE_PHOTO_WEBHOOK_URL");
-      if (makeWebhookUrl) {
-        try {
-          await fetch(makeWebhookUrl, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              photoName, photoUrl,
-              address: address || "", bldgNumber: bldgNumber || "",
-              category: category || "", description: description || "",
-              reviewer: reviewer || "", timestamp: timestamp || new Date().toISOString()
-            })
-          });
-        } catch (e) { /* Don't fail the upload if Make webhook fails */ }
-      }
-
-      return new Response(JSON.stringify({ success: true, photoName, url: photoUrl }), { headers: { "Content-Type": "application/json" } });
-    } catch (err) {
-      return new Response(JSON.stringify({ error: err.message || "Upload failed" }), { status: 500, headers: { "Content-Type": "application/json" } });
+      document.getElementById("count").textContent = filtered.length + " photo(s)" + (filtered.length!==allPhotos.length?" (filtered from "+allPhotos.length+")":"");
+      if(filtered.length===0){el.className="empty";el.textContent="No photos match filters.";return;}
+      el.className="grid";el.innerHTML="";
+      filtered.forEach(p=>{
+        const card=document.createElement("div");card.className="card";
+        card.innerHTML='<a href="'+p.url+'" target="_blank"><img src="'+p.url+'" alt="'+p.photoName+'"/></a>'
+          +'<div class="info"><div class="name">'+p.photoName+'</div>'
+          +'<div class="detail">'+(p.address?"Addr: "+p.address+" ":"")+(p.bldgNumber?"Bldg: "+p.bldgNumber+" ":"")+'</div>'
+          +'<div class="detail">'+(p.category||"")+" · "+(p.reviewer||"")+'</div></div>'
+          +'<button class="delete-btn" data-key="'+p.photoName+'">🗑 Delete</button>';
+        card.querySelector(".delete-btn").onclick = async function(){
+          if(!confirm("Delete "+p.photoName+"?")) return;
+          this.textContent="Deleting…";this.disabled=true;
+          try{
+            const r=await fetch("/api/photos?key="+encodeURIComponent(p.photoName),{method:"DELETE"});
+            if(r.ok){allPhotos=allPhotos.filter(x=>x.photoName!==p.photoName);render();}
+            else{alert("Delete failed");this.textContent="🗑 Delete";this.disabled=false;}
+          }catch(e){alert("Error: "+e.message);this.textContent="🗑 Delete";this.disabled=false;}
+        };
+        el.appendChild(card);
+      });
     }
-  }
 
-  return new Response("Method not allowed", { status: 405 });
-};
-
-export const config = { path: "/api/photos" };
+    filterAddr.oninput = render;
+    filterCat.onchange = render;
+    filterRev.onchange = render;
+    load();
+  </script>
+</body>
+</html>
