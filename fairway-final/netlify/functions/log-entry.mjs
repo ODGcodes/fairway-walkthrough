@@ -57,6 +57,22 @@ export default async (req, context) => {
 
   try {
     const body = await req.json();
+
+    // Vapi sends tool calls wrapped in a message object
+    // Extract the actual arguments from Vapi's format or use raw body
+    let args = body;
+    let toolCallId = null;
+    if (body.message && body.message.toolCalls) {
+      const call = body.message.toolCalls[0];
+      toolCallId = call.id;
+      args = call.function?.arguments || {};
+      if (typeof args === 'string') args = JSON.parse(args);
+    } else if (body.message && body.message.functionCall) {
+      toolCallId = body.message.functionCall.id;
+      args = body.message.functionCall.parameters || {};
+      if (typeof args === 'string') args = JSON.parse(args);
+    }
+
     const {
       bldgNumber = '',
       address = '',
@@ -66,10 +82,11 @@ export default async (req, context) => {
       category = '',
       operatingOrReserve = '',
       description = '',
-    } = body;
+    } = args;
 
     if (!description) {
-      return new Response(JSON.stringify({ error: 'description is required' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
+      const errResp = { results: [{ toolCallId: toolCallId || 'unknown', result: 'Error: description is required' }] };
+      return new Response(JSON.stringify(errResp), { status: 200, headers: { 'Content-Type': 'application/json' } });
     }
 
     // Row maps to columns A through P
@@ -96,16 +113,17 @@ export default async (req, context) => {
     const token = await getAccessToken();
     const result = await appendRow(token, row);
 
-    return new Response(JSON.stringify({
-      success: true,
-      message: 'Row appended',
-      updatedRange: result.updates?.updatedRange || 'unknown',
-    }), {
+    // Return in Vapi's expected format
+    const response = toolCallId
+      ? { results: [{ toolCallId, result: 'Row logged successfully' }] }
+      : { success: true, message: 'Row appended', updatedRange: result.updates?.updatedRange || 'unknown' };
+
+    return new Response(JSON.stringify(response), {
       headers: { 'Content-Type': 'application/json' },
     });
   } catch (err) {
-    return new Response(JSON.stringify({ error: err.message || 'Failed to append row' }), {
-      status: 500,
+    return new Response(JSON.stringify({ results: [{ toolCallId: 'unknown', result: 'Error: ' + (err.message || 'Failed to append row') }] }), {
+      status: 200,
       headers: { 'Content-Type': 'application/json' },
     });
   }
