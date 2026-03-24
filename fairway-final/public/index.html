@@ -1,0 +1,198 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="FW Walk" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <title>Fairway Homes — Walkthrough Logger</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏘️</text></svg>" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Serif+Display&display=swap" rel="stylesheet" />
+    <style>
+      :root{--green-dark:#2B4C3F;--green-mid:#3D6B5A;--green-light:#E8F0EC;--gold:#C49A3C;--gold-light:#F5EDD8;--white:#FAFAF8;--gray-100:#F2F2EF;--gray-300:#D1D1CB;--gray-500:#8A8A82;--gray-800:#3A3A35;--red:#C0392B;--red-light:#FDECEA;--blue:#2980B9;--blue-light:#EBF5FB;--radius:16px;}
+      *{margin:0;padding:0;box-sizing:border-box;}
+      body{font-family:'DM Sans',system-ui,sans-serif;background:var(--green-dark);color:var(--gray-800);min-height:100vh;min-height:100dvh;display:flex;flex-direction:column;}
+      .header{background:var(--green-dark);color:var(--white);padding:20px 24px 16px;text-align:center;}
+      .header-icon{font-size:36px;margin-bottom:4px;}
+      .header h1{font-family:'DM Serif Display',Georgia,serif;font-size:26px;font-weight:400;letter-spacing:0.02em;line-height:1.2;}
+      .header .subtitle{font-size:14px;color:rgba(255,255,255,0.6);margin-top:4px;}
+      .main{flex:1;background:var(--white);border-radius:28px 28px 0 0;padding:32px 24px 40px;display:flex;flex-direction:column;gap:20px;}
+      .status-banner{display:flex;align-items:center;gap:14px;padding:18px 20px;border-radius:var(--radius);background:var(--gray-100);border:2px solid var(--gray-300);transition:all 0.4s ease;}
+      .status-banner.listening{background:var(--green-light);border-color:var(--green-mid);}
+      .status-banner.error{background:var(--red-light);border-color:var(--red);}
+      .status-dot{width:18px;height:18px;border-radius:50%;background:var(--gray-300);flex-shrink:0;transition:background 0.4s ease;}
+      .status-banner.listening .status-dot{background:var(--green-mid);animation:pulse 1.6s ease-in-out infinite;}
+      .status-banner.error .status-dot{background:var(--red);}
+      @keyframes pulse{0%,100%{transform:scale(1);opacity:1;}50%{transform:scale(1.35);opacity:0.6;}}
+      .status-text{font-size:20px;font-weight:600;color:var(--gray-800);line-height:1.3;}
+      .status-sub{font-size:14px;font-weight:400;color:var(--gray-500);margin-top:2px;}
+      .btn{display:flex;align-items:center;justify-content:center;gap:12px;width:100%;padding:22px 24px;border:none;border-radius:var(--radius);font-family:'DM Sans',system-ui,sans-serif;font-size:22px;font-weight:700;cursor:pointer;transition:all 0.2s ease;-webkit-tap-highlight-color:transparent;user-select:none;}
+      .btn:active{transform:scale(0.97);}
+      .btn:disabled{opacity:0.35;cursor:not-allowed;transform:none;}
+      .btn-start{background:var(--green-dark);color:var(--white);box-shadow:0 4px 16px rgba(43,76,63,0.3);}
+      .btn-start:hover:not(:disabled){background:var(--green-mid);}
+      .btn-stop{background:var(--white);color:var(--red);border:3px solid var(--red);}
+      .btn-stop:hover:not(:disabled){background:var(--red-light);}
+      .btn-icon{font-size:26px;line-height:1;}
+      .timer{text-align:center;font-size:15px;color:var(--gray-500);font-variant-numeric:tabular-nums;min-height:22px;}
+      .debug-log{display:none;margin-top:12px;padding:12px 16px;background:#FFF8E1;border:1px solid #FFD54F;border-radius:10px;font-size:13px;font-family:monospace;line-height:1.5;color:#5D4037;max-height:140px;overflow-y:auto;word-break:break-word;}
+      .debug-log.visible{display:block;}
+      .photo-panel{display:none;border:2px solid var(--blue);border-radius:var(--radius);overflow:hidden;}
+      .photo-panel.visible{display:block;}
+      .photo-header{background:var(--blue);color:white;padding:14px 18px;font-size:17px;font-weight:700;display:flex;align-items:center;gap:10px;}
+      .photo-body{padding:18px;background:var(--blue-light);display:flex;flex-direction:column;gap:14px;}
+      .photo-entry-list{list-style:none;}
+      .photo-entry-list:empty{display:none;}
+      .photo-entry-list li{padding:12px 14px;margin-bottom:6px;background:white;border-radius:10px;border:2px solid var(--gray-300);cursor:pointer;font-size:15px;line-height:1.4;}
+      .photo-entry-list li.selected{border-color:var(--blue);box-shadow:0 0 0 2px rgba(41,128,185,0.2);}
+      .photo-entry-list li .entry-addr{font-weight:700;}
+      .photo-entry-list li .entry-desc{color:var(--gray-500);font-size:13px;}
+      .manual-entry{background:white;border-radius:12px;padding:16px;border:1px solid var(--gray-300);}
+      .manual-entry-title{font-size:15px;font-weight:700;margin-bottom:10px;}
+      .manual-row{display:flex;gap:10px;margin-bottom:10px;}
+      .manual-row input,.manual-row select{flex:1;padding:12px;border:2px solid var(--gray-300);border-radius:10px;font-family:'DM Sans',system-ui,sans-serif;font-size:16px;background:white;-webkit-appearance:none;}
+      .manual-row input:focus,.manual-row select:focus{outline:none;border-color:var(--blue);}
+      .manual-row input::placeholder{color:var(--gray-500);}
+      .btn-add-entry{background:var(--green-dark);color:white;font-size:16px;padding:14px;border-radius:10px;}
+      .photo-file-label{display:flex;align-items:center;justify-content:center;gap:10px;padding:16px;background:white;border:2px dashed var(--gray-300);border-radius:12px;font-size:17px;font-weight:600;cursor:pointer;}
+      .photo-file-label:active{background:var(--gray-100);}
+      .photo-file-input{display:none;}
+      .photo-preview-row{display:flex;gap:8px;flex-wrap:wrap;}
+      .photo-preview-row img{width:72px;height:72px;object-fit:cover;border-radius:8px;border:2px solid var(--gray-300);}
+      .btn-upload{background:var(--blue);color:white;font-size:18px;padding:16px;}
+      .btn-upload:hover:not(:disabled){background:#2471A3;}
+      .photo-status{text-align:center;font-size:14px;color:var(--gray-500);min-height:20px;}
+      .photo-status.success{color:var(--green-mid);font-weight:600;}
+      .photo-status.error{color:var(--red);}
+      .photo-saved-list{font-size:13px;color:var(--gray-500);padding:8px 0;}
+      .photo-saved-list div{padding:4px 0;}
+      .photo-saved-list .saved-name{font-weight:600;color:var(--gray-800);}
+      .photo-close{background:none;border:1px solid var(--gray-300);border-radius:10px;padding:10px;width:100%;font-family:'DM Sans',system-ui,sans-serif;font-size:15px;color:var(--gray-500);cursor:pointer;}
+      .instructions{margin-top:auto;padding-top:16px;}
+      .instructions summary{font-size:15px;font-weight:600;color:var(--gray-500);cursor:pointer;padding:8px 0;list-style:none;display:flex;align-items:center;gap:8px;}
+      .instructions summary::-webkit-details-marker{display:none;}
+      .instructions summary::before{content:"ℹ️";font-size:18px;}
+      .instructions[open] summary{color:var(--gray-800);}
+      .instructions .content{padding:16px 20px;background:var(--gold-light);border-radius:12px;margin-top:8px;font-size:15px;line-height:1.6;border-left:4px solid var(--gold);}
+      .instructions .content strong{font-weight:700;}
+      .instructions .content ol{margin:8px 0 0 18px;}
+      .instructions .content li{margin-bottom:6px;}
+      @media(min-width:500px){body{background:var(--gray-100);}.header{padding-top:32px;}.main{max-width:460px;margin:0 auto;border-radius:28px;margin-bottom:32px;box-shadow:0 8px 40px rgba(0,0,0,0.08);}}
+    </style>
+  </head>
+  <body>
+    <div class="header">
+      <div class="header-icon">🏘️</div>
+      <h1>Fairway Homes<br/>Walkthrough Logger</h1>
+      <div class="subtitle">May 2026 Outdoor Inspection</div>
+    </div>
+    <div class="main">
+      <div id="status-banner" class="status-banner"><div class="status-dot"></div><div><div class="status-text" id="status-text">Loading…</div><div class="status-sub" id="status-sub">Initializing voice SDK</div></div></div>
+      <div class="timer" id="timer"></div>
+      <button class="btn btn-start" id="start" disabled><span class="btn-icon">🎙️</span> Start Walkthrough</button>
+      <button class="btn btn-stop" id="stop" disabled><span class="btn-icon">⏹️</span> End Walkthrough</button>
+      <div class="debug-log" id="debug-log"></div>
+      <button class="btn" id="btn-show-photos" style="background:var(--blue);color:white;font-size:18px;padding:16px;"><span class="btn-icon">📸</span> Add Photo</button>
+      <div id="photo-panel" class="photo-panel">
+        <div class="photo-header"><span style="font-size:22px;">📸</span> Upload Photo</div>
+        <div class="photo-body">
+          <ul id="photo-entry-list" class="photo-entry-list"></ul>
+          <div class="manual-entry">
+            <div class="manual-entry-title">What is this photo for?</div>
+            <div class="manual-row"><input type="text" id="manual-address" placeholder="Address (e.g. 2253)" /><input type="text" id="manual-bldg" placeholder="Bldg (e.g. 3)" /></div>
+            <div class="manual-row"><select id="manual-category"><option value="">— Category —</option></select></div>
+            <div class="manual-row"><input type="text" id="manual-desc" placeholder="Short description (optional)" /></div>
+            <button class="btn btn-add-entry" id="btn-add-entry">+ Add to list</button>
+          </div>
+          <label class="photo-file-label">📷 Tap to take or choose photo(s)<input type="file" accept="image/*" capture="environment" multiple class="photo-file-input" id="photo-file-input" /></label>
+          <div id="photo-preview-row" class="photo-preview-row"></div>
+          <button class="btn btn-upload" id="btn-upload" disabled><span class="btn-icon">☁️</span> Upload Photo(s)</button>
+          <div id="photo-status" class="photo-status"></div>
+          <div id="photo-saved-list" class="photo-saved-list"></div>
+          <a href="/photos.html" style="text-align:center;color:var(--blue);font-size:14px;font-weight:600;text-decoration:none;padding:8px 0;">📂 View all uploaded photos</a>
+          <button class="photo-close" id="photo-close">Close</button>
+        </div>
+      </div>
+      <details class="instructions">
+        <summary>How to use this</summary>
+        <div class="content">
+          <strong>Walk &amp; talk!</strong> Describe each problem you see — the assistant will log it to our shared Google Sheet.
+          <br/><br/>
+          <strong>📸 Photos:</strong> Tap "Add Photo," enter the address and category, snap a photo, then tap "Upload." Photos are auto-named and stored. View all photos at <a href="/photos.html">/photos.html</a>.
+          <br/><br/>
+          <strong>Your personalized links:</strong>
+          <ul style="margin:8px 0 0 18px;">
+            <li><code>?reviewer=Cindy</code></li><li><code>?reviewer=Pat</code></li><li><code>?reviewer=Rick</code></li><li><code>?reviewer=Dave</code></li><li><code>?reviewer=Nick</code></li><li><code>?reviewer=Kathy</code></li><li><code>?reviewer=Will</code></li>
+          </ul>
+          <br/>
+          <strong>Add to Home Screen:</strong>
+          <ol><li><strong>iPhone:</strong> Share ↗ → "Add to Home Screen"</li><li><strong>Android:</strong> ⋮ → "Add to Home screen"</li></ol>
+        </div>
+      </details>
+    </div>
+    <script src="https://cdn.jsdelivr.net/gh/balacodeio/Vapi-Web-UMD@latest/dist/latest/vapi-web-bundle.min.js"></script>
+    <script>
+      const ASSISTANT_ID="24383100-a8e8-421c-8259-b380fcd0b4c4";
+      const PUBLIC_KEY="31654b18-d9a7-4ded-b324-8f6d22c7fd1d";
+      const PHOTO_API="/api/photos";
+      const CATEGORIES=["Landscaping","Tree Work","Roof Repair","Wood Rot","Power Wash","Pavement","Owner","Other"];
+      const ALLOWED_REVIEWERS=new Set(["Cindy","Pat","Rick","Dave","Nick","Kathy","Will"]);
+      const sessionLog=[];const photoCounter={};
+      function addSessionEntry(e){sessionLog.push({address:e.address||"",bldgNumber:e.bldgNumber||"",category:e.category||"",description:e.description||"",reviewer:e.reviewer||getReviewerFromUrl(),timestamp:e.timestamp||new Date().toISOString()});renderEntryList();}
+      const statusBanner=document.getElementById("status-banner"),statusText=document.getElementById("status-text"),statusSub=document.getElementById("status-sub"),timerEl=document.getElementById("timer"),startBtn=document.getElementById("start"),stopBtn=document.getElementById("stop"),debugLog=document.getElementById("debug-log"),photoPanel=document.getElementById("photo-panel"),photoEntryList=document.getElementById("photo-entry-list"),photoFileInput=document.getElementById("photo-file-input"),photoPreviewRow=document.getElementById("photo-preview-row"),btnUpload=document.getElementById("btn-upload"),photoStatus=document.getElementById("photo-status"),photoSavedList=document.getElementById("photo-saved-list"),btnShowPhotos=document.getElementById("btn-show-photos"),btnAddEntry=document.getElementById("btn-add-entry"),manualAddress=document.getElementById("manual-address"),manualBldg=document.getElementById("manual-bldg"),manualCategory=document.getElementById("manual-category"),manualDesc=document.getElementById("manual-desc"),photoClose=document.getElementById("photo-close");
+      let vapi=null,timerInterval=null,startTime=null,selectedEntryIdx=-1,selectedFiles=[];
+      CATEGORIES.forEach(c=>{const o=document.createElement("option");o.value=c;o.textContent=c;manualCategory.appendChild(o);});
+      function setStatus(s,t,sub){statusBanner.className="status-banner "+(s||"");statusText.textContent=t;statusSub.textContent=sub||"";}
+      function log(m){console.log("[FW]",m);debugLog.classList.add("visible");debugLog.textContent+=m+"\n";debugLog.scrollTop=debugLog.scrollHeight;}
+      function getReviewerFromUrl(){return(new URLSearchParams(window.location.search).get("reviewer")||"").trim();}
+      function startTimer(){startTime=Date.now();timerInterval=setInterval(()=>{const e=Math.floor((Date.now()-startTime)/1000);timerEl.textContent=String(Math.floor(e/60)).padStart(2,"0")+":"+String(e%60).padStart(2,"0");},1000);}
+      function stopTimer(){clearInterval(timerInterval);timerInterval=null;}
+      function renderEntryList(){
+        photoEntryList.innerHTML="";
+        sessionLog.forEach((e,i)=>{const li=document.createElement("li");const label=[e.bldgNumber?"Bldg "+e.bldgNumber:"",e.address].filter(Boolean).join(" · ")||"No address";li.innerHTML='<div class="entry-addr">'+label+(e.category?" — "+e.category:"")+'</div><div class="entry-desc">'+(e.description||"")+'</div>';if(i===selectedEntryIdx)li.classList.add("selected");li.onclick=()=>{selectedEntryIdx=i;renderEntryList();checkUploadReady();};photoEntryList.appendChild(li);});
+        if(sessionLog.length>0&&(selectedEntryIdx<0||selectedEntryIdx>=sessionLog.length)){selectedEntryIdx=sessionLog.length-1;renderEntryList();}
+      }
+      function generatePhotoName(e){const cat=(e.category||"General").replace(/[\s\/\.]+/g,""),addr=e.bldgNumber?"Bldg"+String(e.bldgNumber).replace(/\s+/g,""):(e.address||"NoAddr"),rev=e.reviewer||"Unknown",key=cat+"-"+addr;photoCounter[key]=(photoCounter[key]||0)+1;return cat+"-"+addr+"-"+rev+"-"+String(photoCounter[key]).padStart(2,"0");}
+      function showPhotoPanel(){photoPanel.classList.add("visible");photoFileInput.value="";photoPreviewRow.innerHTML="";selectedFiles=[];btnUpload.disabled=true;photoStatus.textContent="";photoStatus.className="photo-status";if(sessionLog.length>0){const l=sessionLog[sessionLog.length-1];manualAddress.value=l.address||"";manualBldg.value=l.bldgNumber||"";manualCategory.value=l.category||"";}renderEntryList();photoPanel.scrollIntoView({behavior:"smooth",block:"start"});}
+      function hidePhotoPanel(){photoPanel.classList.remove("visible");}
+      function checkUploadReady(){btnUpload.disabled=selectedFiles.length===0||selectedEntryIdx<0;}
+      btnAddEntry.onclick=()=>{const a=manualAddress.value.trim(),b=manualBldg.value.trim(),c=manualCategory.value,d=manualDesc.value.trim();if(!a&&!b&&!d)return;addSessionEntry({address:a,bldgNumber:b,category:c,description:d});manualDesc.value="";};
+      photoFileInput.addEventListener("change",e=>{selectedFiles=Array.from(e.target.files);photoPreviewRow.innerHTML="";selectedFiles.forEach(f=>{const img=document.createElement("img");img.src=URL.createObjectURL(f);photoPreviewRow.appendChild(img);});photoStatus.textContent=selectedFiles.length+" photo(s) selected";photoStatus.className="photo-status";checkUploadReady();});
+      btnUpload.onclick=async()=>{
+        if(selectedFiles.length===0||selectedEntryIdx<0)return;
+        const entry=sessionLog[selectedEntryIdx];btnUpload.disabled=true;
+        photoStatus.textContent="Uploading…";photoStatus.className="photo-status";
+        let ok=0;
+        for(const file of selectedFiles){
+          const name=generatePhotoName(entry),ext=file.name.split(".").pop()||"jpg",fullName=name+"."+ext;
+          try{
+            const b64=await new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(r.result.split(",")[1]);r.onerror=()=>rej(r.error);r.readAsDataURL(file);});
+            const resp=await fetch(PHOTO_API,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({photoName:fullName,address:entry.address,bldgNumber:entry.bldgNumber,category:entry.category,description:entry.description,reviewer:entry.reviewer,timestamp:new Date().toISOString(),fileBase64:b64,fileMimeType:file.type||"image/jpeg"})});
+            if(resp.ok){ok++;const div=document.createElement("div");div.innerHTML='✅ <span class="saved-name">'+fullName+'</span>';photoSavedList.appendChild(div);}
+            else{const err=await resp.text();log("Upload fail "+fullName+": "+err);}
+          }catch(err){log("Upload error: "+(err?.message||err));}
+        }
+        if(ok===selectedFiles.length){photoStatus.textContent=ok+" photo(s) uploaded!";photoStatus.className="photo-status success";photoFileInput.value="";photoPreviewRow.innerHTML="";selectedFiles=[];btnUpload.disabled=true;}
+        else{photoStatus.textContent=ok+"/"+selectedFiles.length+" uploaded. Check log.";photoStatus.className="photo-status error";btnUpload.disabled=false;}
+      };
+      btnShowPhotos.onclick=showPhotoPanel;photoClose.onclick=hidePhotoPanel;
+      try{
+        const V=window.Vapi||(typeof Vapi!=="undefined"?Vapi:null);if(!V)throw new Error("Vapi SDK did not load.");vapi=new V(PUBLIC_KEY);
+        vapi.on("call-start",()=>{setStatus("listening","Listening…","Describe what you see");startBtn.disabled=true;stopBtn.disabled=false;debugLog.classList.remove("visible");debugLog.textContent="";startTimer();});
+        vapi.on("call-end",()=>{setStatus("","Done!","Session ended — add photos below if needed");startBtn.disabled=false;stopBtn.disabled=true;stopTimer();timerEl.textContent="";});
+        vapi.on("message",msg=>{try{let calls=[];if(msg?.type==="tool-calls"&&Array.isArray(msg.toolCalls))calls=msg.toolCalls;else if(msg?.type==="function-call"&&msg.functionCall)calls=[msg.functionCall];calls.forEach(call=>{const n=call.name||call.function?.name||"";if(n==="append_walkthrough_row"){const raw=call.parameters||call.function?.arguments||call.arguments||{};const a=typeof raw==="string"?JSON.parse(raw):raw;addSessionEntry({address:a.address||"",bldgNumber:a.bldgNumber||"",category:a.majorCategory||a.minorCategory||a.category||"",description:a.descriptionActionNeeded||a.description||"",reviewer:a.reviewPerson||getReviewerFromUrl()});console.log("[FW] Auto-captured:",sessionLog[sessionLog.length-1]);}});}catch(e){console.warn("[FW] msg parse:",e);}});
+        vapi.on("error",e=>{log("Vapi error: "+(e?.message||JSON.stringify(e)));setStatus("error","Error","See details below");startBtn.disabled=false;stopBtn.disabled=true;stopTimer();timerEl.textContent="";});
+        const reviewer=getReviewerFromUrl();
+        if(!reviewer){setStatus("error","Missing reviewer","Open with ?reviewer=Name (e.g., ?reviewer=Cindy)");startBtn.disabled=true;}
+        else if(!ALLOWED_REVIEWERS.has(reviewer)){setStatus("error","Unknown reviewer","Use one of: "+Array.from(ALLOWED_REVIEWERS).join(", "));startBtn.disabled=true;}
+        else{setStatus("","Ready","Reviewer: "+reviewer+". Tap below to start.");startBtn.disabled=false;}
+      }catch(err){log("Init failed: "+err.message);setStatus("error","SDK failed to load","See details below");}
+      startBtn.onclick=async()=>{if(!vapi){log("Vapi not init");return;}const r=getReviewerFromUrl();if(!r||!ALLOWED_REVIEWERS.has(r)){setStatus("error","Missing/invalid reviewer","Use ?reviewer=Cindy");return;}setStatus("","Connecting…","Reviewer: "+r);startBtn.disabled=true;timerEl.textContent="";debugLog.classList.remove("visible");debugLog.textContent="";try{await vapi.start(ASSISTANT_ID,{variableValues:{reviewerName:r}});}catch(err){log("Start failed: "+(err?.message||JSON.stringify(err)));setStatus("error","Could not connect","See details below");startBtn.disabled=false;}};
+      stopBtn.onclick=async()=>{if(!vapi)return;setStatus("","Ending…","Please wait");stopBtn.disabled=true;try{await vapi.stop();}catch(err){log("Stop: "+(err?.message||err));}};
+    </script>
+  </body>
+</html>
