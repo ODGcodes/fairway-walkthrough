@@ -1,3 +1,6 @@
+Index · HTML
+Copy
+
 <!doctype html>
 <html lang="en">
   <head>
@@ -47,10 +50,10 @@
       .photo-body{padding:18px;background:var(--blue-light);display:flex;flex-direction:column;gap:14px;}
       .photo-entry-list{list-style:none;}
       .photo-entry-list:empty{display:none;}
-      .photo-entry-list li{padding:12px 14px;margin-bottom:6px;background:white;border-radius:10px;border:2px solid var(--gray-300);cursor:pointer;font-size:15px;line-height:1.4;}
+      .photo-entry-list li{padding:12px 14px;margin-bottom:6px;background:white;border-radius:10px;border:2px solid var(--gray-300);cursor:pointer;font-size:15px;line-height:1.4;overflow:hidden;word-break:break-word;}
       .photo-entry-list li.selected{border-color:var(--blue);box-shadow:0 0 0 2px rgba(41,128,185,0.2);}
-      .photo-entry-list li .entry-addr{font-weight:700;}
-      .photo-entry-list li .entry-desc{color:var(--gray-500);font-size:13px;}
+      .photo-entry-list li .entry-addr{font-weight:700;overflow:hidden;text-overflow:ellipsis;}
+      .photo-entry-list li .entry-desc{color:var(--gray-500);font-size:13px;overflow:hidden;text-overflow:ellipsis;}
       .manual-entry{background:white;border-radius:12px;padding:16px;border:1px solid var(--gray-300);}
       .manual-entry-title{font-size:15px;font-weight:700;margin-bottom:10px;}
       .manual-row{display:flex;gap:10px;margin-bottom:10px;}
