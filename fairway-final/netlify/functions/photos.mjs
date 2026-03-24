@@ -39,18 +39,50 @@ export default async (req, context) => {
       const binary = Uint8Array.from(atob(fileBase64), c => c.charCodeAt(0));
       const store = getStore("photos");
       await store.set(photoName, binary);
+      const photoUrl = "https://fairway-walkthrough.netlify.app/api/photos?key=" + encodeURIComponent(photoName);
       const metaStore = getStore("photo-meta");
       await metaStore.setJSON(photoName, {
         photoName, mimeType: fileMimeType || "image/jpeg",
         address: address || "", bldgNumber: bldgNumber || "",
         category: category || "", description: description || "",
         reviewer: reviewer || "", timestamp: timestamp || new Date().toISOString(),
-        url: "/api/photos?key=" + encodeURIComponent(photoName)
+        url: photoUrl
       });
-      return new Response(JSON.stringify({ success: true, photoName, url: "/api/photos?key=" + encodeURIComponent(photoName) }), { headers: { "Content-Type": "application/json" } });
+
+      // Send metadata + photo URL to Make webhook for Google Sheets logging
+      const makeWebhookUrl = Netlify.env.get("MAKE_PHOTO_WEBHOOK_URL");
+      if (makeWebhookUrl) {
+        try {
+          await fetch(makeWebhookUrl, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              photoName, photoUrl,
+              address: address || "", bldgNumber: bldgNumber || "",
+              category: category || "", description: description || "",
+              reviewer: reviewer || "", timestamp: timestamp || new Date().toISOString()
+            })
+          });
+        } catch (e) { /* Don't fail the upload if Make webhook fails */ }
+      }
+
+      return new Response(JSON.stringify({ success: true, photoName, url: photoUrl }), { headers: { "Content-Type": "application/json" } });
     } catch (err) {
       return new Response(JSON.stringify({ error: err.message || "Upload failed" }), { status: 500, headers: { "Content-Type": "application/json" } });
     }
+  }
+
+  if (req.method === "DELETE") {
+    const url = new URL(req.url);
+    const key = url.searchParams.get("key");
+    if (!key) {
+      return new Response(JSON.stringify({ error: "Missing ?key= parameter" }), { status: 400, headers: { "Content-Type": "application/json" } });
+    }
+    const store = getStore("photos");
+    const metaStore = getStore("photo-meta");
+    await store.delete(key);
+    await metaStore.delete(key);
+    return new Response(JSON.stringify({ success: true, deleted: key }), { headers: { "Content-Type": "application/json" } });
   }
 
   return new Response("Method not allowed", { status: 405 });
