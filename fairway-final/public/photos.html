@@ -1,47 +1,78 @@
-<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1"/>
-  <title>Fairway Photos</title>
-  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;600;700&display=swap" rel="stylesheet"/>
-  <style>
-    *{margin:0;padding:0;box-sizing:border-box;}
-    body{font-family:'DM Sans',system-ui,sans-serif;background:#F2F2EF;color:#3A3A35;padding:24px;}
-    h1{font-size:22px;margin-bottom:16px;}
-    .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:16px;}
-    .card{background:white;border-radius:12px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.08);}
-    .card img{width:100%;height:180px;object-fit:cover;}
-    .card .info{padding:12px;font-size:14px;line-height:1.5;}
-    .card .name{font-weight:700;word-break:break-all;}
-    .card .detail{color:#8A8A82;font-size:13px;}
-    .empty{text-align:center;padding:60px;color:#8A8A82;font-size:16px;}
-    .loading{text-align:center;padding:60px;color:#8A8A82;}
-  </style>
-</head>
-<body>
-  <h1>🏘️ Fairway Walkthrough Photos</h1>
-  <div id="content" class="loading">Loading photos…</div>
-  <script>
-    async function load(){
-      const el=document.getElementById("content");
-      try{
-        const resp=await fetch("/api/photos");
-        const data=await resp.json();
-        if(!data.photos||data.photos.length===0){el.className="empty";el.textContent="No photos uploaded yet.";return;}
-        el.className="grid";el.innerHTML="";
-        data.photos.sort((a,b)=>(b.timestamp||"").localeCompare(a.timestamp||""));
-        data.photos.forEach(p=>{
-          const card=document.createElement("div");card.className="card";
-          card.innerHTML='<a href="'+p.url+'" target="_blank"><img src="'+p.url+'" alt="'+p.photoName+'"/></a>'
-            +'<div class="info"><div class="name">'+p.photoName+'</div>'
-            +'<div class="detail">'+(p.address?"Addr: "+p.address+" ":"")+(p.bldgNumber?"Bldg: "+p.bldgNumber+" ":"")+'</div>'
-            +'<div class="detail">'+(p.category||"")+" · "+(p.reviewer||"")+'</div></div>';
-          el.appendChild(card);
-        });
-      }catch(e){el.className="empty";el.textContent="Error loading photos: "+e.message;}
+import { getStore } from "@netlify/blobs";
+
+export default async (req, context) => {
+  if (req.method === "GET") {
+    const url = new URL(req.url);
+    const key = url.searchParams.get("key");
+    const store = getStore("photos");
+    const metaStore = getStore("photo-meta");
+
+    if (key) {
+      const blob = await store.get(key, { type: "arrayBuffer" });
+      if (!blob) return new Response("Not found", { status: 404 });
+      let mime = "image/jpeg";
+      try {
+        const m = await metaStore.get(key, { type: "json" });
+        if (m && m.mimeType) mime = m.mimeType;
+      } catch (e) {}
+      return new Response(blob, { headers: { "Content-Type": mime, "Cache-Control": "public, max-age=86400" } });
     }
-    load();
-  </script>
-</body>
-</html>
+
+    const { blobs } = await metaStore.list();
+    const photos = [];
+    for (const b of blobs) {
+      try {
+        const m = await metaStore.get(b.key, { type: "json" });
+        photos.push({ key: b.key, ...m });
+      } catch (e) {}
+    }
+    return new Response(JSON.stringify({ photos }), { headers: { "Content-Type": "application/json" } });
+  }
+
+  if (req.method === "POST") {
+    try {
+      const body = await req.json();
+      const { photoName, fileBase64, fileMimeType, address, bldgNumber, category, description, reviewer, timestamp } = body;
+      if (!fileBase64 || !photoName) {
+        return new Response(JSON.stringify({ error: "Missing fileBase64 or photoName" }), { status: 400, headers: { "Content-Type": "application/json" } });
+      }
+      const binary = Uint8Array.from(atob(fileBase64), c => c.charCodeAt(0));
+      const store = getStore("photos");
+      await store.set(photoName, binary);
+      const photoUrl = "https://fairway-walkthrough.netlify.app/api/photos?key=" + encodeURIComponent(photoName);
+      const metaStore = getStore("photo-meta");
+      await metaStore.setJSON(photoName, {
+        photoName, mimeType: fileMimeType || "image/jpeg",
+        address: address || "", bldgNumber: bldgNumber || "",
+        category: category || "", description: description || "",
+        reviewer: reviewer || "", timestamp: timestamp || new Date().toISOString(),
+        url: photoUrl
+      });
+
+      // Send metadata + photo URL to Make webhook for Google Sheets logging
+      const makeWebhookUrl = Netlify.env.get("MAKE_PHOTO_WEBHOOK_URL");
+      if (makeWebhookUrl) {
+        try {
+          await fetch(makeWebhookUrl, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              photoName, photoUrl,
+              address: address || "", bldgNumber: bldgNumber || "",
+              category: category || "", description: description || "",
+              reviewer: reviewer || "", timestamp: timestamp || new Date().toISOString()
+            })
+          });
+        } catch (e) { /* Don't fail the upload if Make webhook fails */ }
+      }
+
+      return new Response(JSON.stringify({ success: true, photoName, url: photoUrl }), { headers: { "Content-Type": "application/json" } });
+    } catch (err) {
+      return new Response(JSON.stringify({ error: err.message || "Upload failed" }), { status: 500, headers: { "Content-Type": "application/json" } });
+    }
+  }
+
+  return new Response("Method not allowed", { status: 405 });
+};
+
+export const config = { path: "/api/photos" };
