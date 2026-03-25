@@ -13,7 +13,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Serif+Display&display=swap" rel="stylesheet" />
     <style>
-      :root{--green-dark:#2B4C3F;--green-mid:#3D6B5A;--green-light:#E8F0EC;--gold:#C49A3C;--gold-light:#F5EDD8;--white:#FAFAF8;--gray-100:#F2F2EF;--gray-300:#D1D1CB;--gray-500:#8A8A82;--gray-800:#3A3A35;--red:#C0392B;--red-light:#FDECEA;--blue:#2980B9;--blue-light:#EBF5FB;--radius:16px;}
+      :root{--green-dark:#1A3A2F;--green-mid:#2D5A48;--green-light:#E8F0EC;--gold:#B8860B;--gold-light:#F5EDD8;--white:#FFFFFF;--gray-100:#F0F0ED;--gray-300:#C0C0B8;--gray-500:#5A5A52;--gray-800:#1A1A18;--red:#B71C1C;--red-light:#FDECEA;--blue:#1565C0;--blue-light:#E3F0FB;--radius:16px;}
       *{margin:0;padding:0;box-sizing:border-box;}
       body{font-family:'DM Sans',system-ui,sans-serif;background:var(--green-dark);color:var(--gray-800);min-height:100vh;min-height:100dvh;display:flex;flex-direction:column;}
       .header{background:var(--green-dark);color:var(--white);padding:14px 24px;text-align:center;}
@@ -22,13 +22,13 @@
       .main{flex:1;background:var(--white);border-radius:28px 28px 0 0;padding:24px 20px 40px;display:flex;flex-direction:column;gap:16px;overflow:hidden;width:100%;}
 
       /* Field guide */
-      .field-guide{background:var(--gray-100);border-radius:12px;padding:14px 16px;border:1px solid var(--gray-300);}
-      .field-guide-title{font-size:14px;font-weight:700;color:var(--gray-800);margin-bottom:8px;}
-      .field-row{display:flex;align-items:baseline;gap:6px;padding:3px 0;font-size:13px;line-height:1.4;}
-      .field-icon{flex-shrink:0;width:20px;text-align:center;font-size:13px;}
-      .field-label{font-weight:700;color:var(--gray-800);white-space:nowrap;min-width:70px;}
-      .field-hint{color:var(--gray-500);font-size:12px;}
-      .field-hint.cats{font-size:11px;line-height:1.5;}
+      .field-guide{background:var(--gray-100);border-radius:12px;padding:14px 16px;border:2px solid var(--gray-300);}
+      .field-guide-title{font-size:15px;font-weight:700;color:var(--gray-800);margin-bottom:8px;}
+      .field-row{display:flex;align-items:baseline;gap:6px;padding:4px 0;font-size:14px;line-height:1.4;}
+      .field-icon{flex-shrink:0;width:20px;text-align:center;font-size:14px;}
+      .field-label{font-weight:700;color:var(--gray-800);white-space:nowrap;min-width:75px;}
+      .field-hint{color:var(--gray-500);font-size:13px;font-weight:500;}
+      .field-hint.cats{font-size:12px;line-height:1.5;font-weight:500;}
       .status-banner{display:flex;align-items:center;gap:14px;padding:18px 20px;border-radius:var(--radius);background:var(--gray-100);border:2px solid var(--gray-300);transition:all 0.4s ease;max-width:100%;}
       .status-banner.listening{background:var(--green-light);border-color:var(--green-mid);}
       .status-banner.error{background:var(--red-light);border-color:var(--red);}
@@ -144,11 +144,15 @@
       <details class="instructions">
         <summary>How to use this</summary>
         <div class="content">
-          <strong>Walk &amp; talk!</strong> Describe each problem you see — the assistant will log it to our shared Google Sheet.
+          <strong>1. Voice Log:</strong> Tap "Start Walkthrough" and describe each issue. The assistant will ask for missing details and log it to the spreadsheet. Say "done" when finished.
           <br/><br/>
-          <strong>📸 Photos:</strong> Tap "Add Photo," enter the address and category, snap a photo, then tap "Upload." Photos are auto-named and stored. View all photos at <a href="/photos.html">/photos.html</a>.
+          <strong>2. Photos:</strong> Tap "Add Photo." Use 📷 <strong>Take Photo</strong> for the camera or 🖼️ <strong>Gallery</strong> to pick an existing photo. Fill in address/building/category, then tap ☁️ <strong>Upload</strong>.
           <br/><br/>
-          <strong>Your personalized links:</strong>
+          <strong>3. Review:</strong> Tap "Review Entries" to see everything logged to the spreadsheet. Use filters to search by address, category, or reviewer.
+          <br/><br/>
+          <strong>4. Photo Gallery:</strong> Tap "View all uploaded photos" inside the photo panel to see, filter, or delete photos.
+          <br/><br/>
+          <strong>Board member links:</strong>
           <ul style="margin:8px 0 0 18px;">
             <li><code>?reviewer=Cindy</code></li><li><code>?reviewer=Pat</code></li><li><code>?reviewer=Rick</code></li><li><code>?reviewer=Dave</code></li><li><code>?reviewer=Nick</code></li><li><code>?reviewer=Kathy</code></li><li><code>?reviewer=Will</code></li>
           </ul>
