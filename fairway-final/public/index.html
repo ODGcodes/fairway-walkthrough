@@ -219,19 +219,21 @@
         }
         if(selectedFiles.length===0||selectedEntryIdx<0)return;
         const entry=sessionLog[selectedEntryIdx];btnUpload.disabled=true;
-        photoStatus.textContent="Uploading…";photoStatus.className="photo-status";
-        let ok=0;
+        photoStatus.textContent="Uploading "+selectedFiles.length+" photo(s)…";photoStatus.className="photo-status";
+        let ok=0,fail=0;
         for(const file of selectedFiles){
           const name=generatePhotoName(entry),ext=file.name.split(".").pop()||"jpg",fullName=name+"."+ext;
           try{
+            photoStatus.textContent="Uploading "+fullName+"…";
             const b64=await new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(r.result.split(",")[1]);r.onerror=()=>rej(r.error);r.readAsDataURL(file);});
             const resp=await fetch(PHOTO_API,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({photoName:fullName,address:entry.address,bldgNumber:entry.bldgNumber,category:entry.category,description:entry.description,reviewer:entry.reviewer,timestamp:new Date().toISOString(),fileBase64:b64,fileMimeType:file.type||"image/jpeg"})});
-            if(resp.ok){ok++;const div=document.createElement("div");div.innerHTML='✅ <span class="saved-name">'+fullName+'</span>';photoSavedList.appendChild(div);}
-            else{const err=await resp.text();log("Upload fail "+fullName+": "+err);}
-          }catch(err){log("Upload error: "+(err?.message||err));}
+            if(resp.ok){ok++;const result=await resp.json();const div=document.createElement("div");div.innerHTML='✅ <span class="saved-name">'+fullName+'</span>'+(result.sheet&&result.sheet.matched?' (linked to row '+result.sheet.row+')':' (not linked to sheet)');photoSavedList.appendChild(div);}
+            else{fail++;const err=await resp.text();log("Upload fail "+fullName+": "+err);const div=document.createElement("div");div.innerHTML='❌ <span style="color:var(--red)">'+fullName+' failed</span>';photoSavedList.appendChild(div);}
+          }catch(err){fail++;log("Upload error: "+(err?.message||err));const div=document.createElement("div");div.innerHTML='❌ <span style="color:var(--red)">Error: '+(err?.message||'unknown')+'</span>';photoSavedList.appendChild(div);}
         }
-        if(ok===selectedFiles.length){photoStatus.textContent=ok+" photo(s) uploaded!";photoStatus.className="photo-status success";photoFileInput.value="";photoPreviewRow.innerHTML="";selectedFiles=[];btnUpload.disabled=true;}
-        else{photoStatus.textContent=ok+"/"+selectedFiles.length+" uploaded. Check log.";photoStatus.className="photo-status error";btnUpload.disabled=false;}
+        if(ok>0&&fail===0){photoStatus.textContent=ok+" photo(s) uploaded!";photoStatus.className="photo-status success";photoFileCamera.value="";photoFileGallery.value="";photoPreviewRow.innerHTML="";selectedFiles=[];btnUpload.disabled=true;}
+        else if(ok>0){photoStatus.textContent=ok+" uploaded, "+fail+" failed.";photoStatus.className="photo-status error";btnUpload.disabled=false;}
+        else{photoStatus.textContent="Upload failed. Try again.";photoStatus.className="photo-status error";btnUpload.disabled=false;}
       };
       btnShowPhotos.onclick=showPhotoPanel;photoClose.onclick=hidePhotoPanel;
       try{
