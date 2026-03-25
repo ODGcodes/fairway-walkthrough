@@ -74,24 +74,27 @@ export default async (req, context) => {
   try {
     const body = await req.json();
 
-    // Vapi sends tool calls as message.toolCallList (per Vapi docs)
-    // Also handle direct POST body for manual testing
+    // Vapi sends tool calls in various formats — check all possible paths
     let args = body;
     let toolCallId = null;
     if (body.message && body.message.toolCallList) {
-      // Official Vapi format: message.toolCallList[0].id and .arguments
       const call = body.message.toolCallList[0];
       toolCallId = call.id;
-      args = call.arguments || {};
+      // Arguments can be in call.arguments OR call.function.arguments
+      args = call.arguments || call.function?.arguments || {};
+      if (typeof args === 'string') args = JSON.parse(args);
+    } else if (body.message && body.message.toolWithToolCallList) {
+      // Another Vapi format — toolWithToolCallList[0].toolCall.function.parameters
+      const item = body.message.toolWithToolCallList[0];
+      toolCallId = item.toolCall?.id;
+      args = item.toolCall?.function?.parameters || item.toolCall?.function?.arguments || {};
       if (typeof args === 'string') args = JSON.parse(args);
     } else if (body.message && body.message.toolCalls) {
-      // Fallback: older format
       const call = body.message.toolCalls[0];
       toolCallId = call.id;
       args = call.function?.arguments || call.arguments || {};
       if (typeof args === 'string') args = JSON.parse(args);
     } else if (body.message && body.message.functionCall) {
-      // Fallback: function-call format
       toolCallId = body.message.functionCall.id;
       args = body.message.functionCall.parameters || {};
       if (typeof args === 'string') args = JSON.parse(args);
