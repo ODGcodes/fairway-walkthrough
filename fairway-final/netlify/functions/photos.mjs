@@ -69,20 +69,25 @@ async function addPhotoUrlToSheet(photoUrl, address, bldgNumber, category) {
     if (bestRow < 0) bestRow = addrOnlyMatch;
     if (bestRow < 0) return { matched: false, reason: 'No matching row for address=' + address + ' bldg=' + bldgNumber + ' category=' + category };
 
-    // Build a gallery link filtered by address and category
-    const params = new URLSearchParams();
-    if (address) params.set('address', address.toString().trim());
-    if (category) params.set('category', category.toString().trim());
-    const galleryUrl = 'https://fairway-walkthrough.netlify.app/photos.html?' + params.toString();
+    // Build a short gallery link — use relative path that's short in the cell
+    const addr = (address || '').toString().trim();
+    const cat = (category || '').toString().trim().replace(/[\s\/\.]+/g, '');
+    const shortPath = 'https://fairway-walkthrough.netlify.app/photos.html?' + 
+      (addr ? 'address=' + encodeURIComponent(addr) : '') +
+      (addr && cat ? '&' : '') +
+      (cat ? 'category=' + encodeURIComponent(cat) : '');
 
-    // Write plain URL to column I — Google Sheets auto-links URLs
+    // Write HYPERLINK formula with short display text to keep the cell compact
+    const displayText = '📷 ' + (addr || 'Photos') + (cat ? ' ' + cat : '');
+    const cellValue = '=HYPERLINK("' + shortPath + '","' + displayText + '")';
+
     const rowNum = bestRow + 1;
     const writeRange = `'${SHEET_TAB}'!I${rowNum}`;
-    const writeUrl = `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/${encodeURIComponent(writeRange)}?valueInputOption=RAW`;
+    const writeUrl = `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/${encodeURIComponent(writeRange)}?valueInputOption=USER_ENTERED`;
     const writeResp = await fetch(writeUrl, {
       method: 'PUT',
       headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ range: writeRange, majorDimension: 'ROWS', values: [[galleryUrl]] }),
+      body: JSON.stringify({ range: writeRange, majorDimension: 'ROWS', values: [[cellValue]] }),
     });
     const writeData = await writeResp.json();
     if (writeData.error) return { matched: false, reason: JSON.stringify(writeData.error) };
