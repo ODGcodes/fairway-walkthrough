@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>Fairway — Review Entries</title>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;600;700&display=swap" rel="stylesheet"/>
+  <style>
+    :root{--green-dark:#2B4C3F;--green-mid:#3D6B5A;--white:#FAFAF8;--gray-100:#F2F2EF;--gray-300:#D1D1CB;--gray-500:#8A8A82;--gray-800:#3A3A35;--blue:#2980B9;--red:#C0392B;--gold:#C49A3C;}
+    *{margin:0;padding:0;box-sizing:border-box;}
+    body{font-family:'DM Sans',system-ui,sans-serif;background:var(--gray-100);color:var(--gray-800);min-height:100vh;}
+    .top-bar{background:var(--green-dark);color:white;padding:14px 20px;display:flex;align-items:center;justify-content:space-between;}
+    .top-bar h1{font-size:18px;font-weight:700;}
+    .top-bar a{color:rgba(255,255,255,0.7);text-decoration:none;font-size:14px;font-weight:600;}
+    .controls{padding:16px 20px;display:flex;gap:10px;flex-wrap:wrap;align-items:center;}
+    .controls input,.controls select{padding:8px 12px;border:2px solid var(--gray-300);border-radius:8px;font-family:'DM Sans',system-ui,sans-serif;font-size:14px;background:white;}
+    .controls input{flex:1;min-width:120px;}
+    .count{padding:0 20px 8px;font-size:13px;color:var(--gray-500);}
+    .refresh-btn{padding:8px 16px;background:var(--green-dark);color:white;border:none;border-radius:8px;font-family:'DM Sans',system-ui,sans-serif;font-size:14px;font-weight:600;cursor:pointer;}
+
+    /* Card-based layout for mobile */
+    .entries{padding:0 16px 40px;}
+    .card{background:white;border-radius:12px;margin-bottom:12px;padding:16px;box-shadow:0 1px 4px rgba(0,0,0,0.06);border-left:4px solid var(--green-mid);}
+    .card.priority-1{border-left-color:var(--red);}
+    .card.priority-2{border-left-color:var(--gold);}
+    .card.priority-3{border-left-color:var(--blue);}
+    .card.priority-4{border-left-color:var(--gray-300);}
+    .card-top{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px;}
+    .card-addr{font-weight:700;font-size:16px;}
+    .card-priority{font-size:12px;font-weight:700;padding:2px 8px;border-radius:6px;background:var(--gray-100);color:var(--gray-500);}
+    .card-priority.p1{background:#FDECEA;color:var(--red);}
+    .card-priority.p2{background:#FFF8E1;color:#E67E22;}
+    .card-priority.p3{background:#EBF5FB;color:var(--blue);}
+    .card-desc{font-size:15px;margin-bottom:8px;line-height:1.4;}
+    .card-meta{font-size:12px;color:var(--gray-500);display:flex;flex-wrap:wrap;gap:8px;}
+    .card-meta span{background:var(--gray-100);padding:2px 8px;border-radius:6px;}
+    .card-photos{margin-top:8px;}
+    .card-photos a{color:var(--blue);font-size:13px;font-weight:600;text-decoration:none;}
+
+    .empty{text-align:center;padding:60px 20px;color:var(--gray-500);font-size:16px;}
+    .loading{text-align:center;padding:60px 20px;color:var(--gray-500);}
+    .error{text-align:center;padding:40px 20px;color:var(--red);font-size:14px;}
+
+    @media(min-width:700px){
+      .entries{max-width:700px;margin:0 auto;}
+      .controls{max-width:700px;margin:0 auto;}
+      .count{max-width:700px;margin:0 auto;}
+    }
+  </style>
+</head>
+<body>
+  <div class="top-bar">
+    <h1>🏘️ Review Entries</h1>
+    <a href="/">← Logger</a>
+  </div>
+  <div class="controls">
+    <input type="text" id="filter-text" placeholder="Search address, description..." />
+    <select id="filter-cat"><option value="">All categories</option></select>
+    <select id="filter-reviewer"><option value="">All reviewers</option></select>
+    <button class="refresh-btn" id="btn-refresh">↻ Refresh</button>
+  </div>
+  <div class="count" id="count"></div>
+  <div class="entries" id="entries">
+    <div class="loading">Loading entries from Google Sheet…</div>
+  </div>
+
+  <script>
+    let allEntries = [];
+    let headers = [];
+    const filterText = document.getElementById('filter-text');
+    const filterCat = document.getElementById('filter-cat');
+    const filterRev = document.getElementById('filter-reviewer');
+    const entriesEl = document.getElementById('entries');
+    const countEl = document.getElementById('count');
+    const btnRefresh = document.getElementById('btn-refresh');
+
+    async function load() {
+      entriesEl.innerHTML = '<div class="loading">Loading…</div>';
+      try {
+        const resp = await fetch('/api/review');
+        const data = await resp.json();
+        if (data.error) throw new Error(data.error);
+        headers = data.headers;
+        allEntries = data.entries;
+
+        // Populate filter dropdowns
+        const cats = [...new Set(allEntries.map(e => e['CATEGORY'] || e['Category'] || '').filter(Boolean))];
+        const revs = [...new Set(allEntries.map(e => e['REVIEWER(S)'] || e['Reviewer'] || '').filter(Boolean))];
+        filterCat.innerHTML = '<option value="">All categories</option>';
+        filterRev.innerHTML = '<option value="">All reviewers</option>';
+        cats.forEach(c => { const o = document.createElement('option'); o.value = c; o.textContent = c; filterCat.appendChild(o); });
+        revs.forEach(r => { const o = document.createElement('option'); o.value = r; o.textContent = r; filterRev.appendChild(o); });
+
+        render();
+      } catch (e) {
+        entriesEl.innerHTML = '<div class="error">Error: ' + e.message + '</div>';
+      }
+    }
+
+    function getField(entry, ...names) {
+      for (const n of names) { if (entry[n]) return entry[n]; }
+      return '';
+    }
+
+    function render() {
+      const search = filterText.value.toLowerCase();
+      const cat = filterCat.value;
+      const rev = filterRev.value;
+
+      const filtered = allEntries.filter(e => {
+        const addr = getField(e, 'ADDRESS', 'Address').toLowerCase();
+        const bldg = getField(e, 'BLDG #', 'Bldg').toLowerCase();
+        const desc = getField(e, 'DESCRIPTION', 'Description').toLowerCase();
+        const loc = getField(e, 'LOCATION', 'Location').toLowerCase();
+        const eCat = getField(e, 'CATEGORY', 'Category');
+        const eRev = getField(e, 'REVIEWER(S)', 'Reviewer');
+
+        if (search && !addr.includes(search) && !bldg.includes(search) && !desc.includes(search) && !loc.includes(search)) return false;
+        if (cat && eCat !== cat) return false;
+        if (rev && eRev !== rev) return false;
+        return true;
+      });
+
+      countEl.textContent = filtered.length + ' entries' + (filtered.length !== allEntries.length ? ' (filtered from ' + allEntries.length + ')' : '');
+
+      if (filtered.length === 0) {
+        entriesEl.innerHTML = '<div class="empty">No entries match.</div>';
+        return;
+      }
+
+      entriesEl.innerHTML = '';
+      filtered.forEach(e => {
+        const addr = getField(e, 'ADDRESS', 'Address');
+        const bldg = getField(e, 'BLDG #', 'Bldg');
+        const desc = getField(e, 'DESCRIPTION', 'Description');
+        const loc = getField(e, 'LOCATION', 'Location');
+        const eCat = getField(e, 'CATEGORY', 'Category');
+        const eRev = getField(e, 'REVIEWER(S)', 'Reviewer');
+        const pri = getField(e, 'RANK 1-4', 'Priority');
+        const budget = getField(e, 'OPERATING OR RESERVE', 'Budget');
+        const photos = getField(e, 'PHOTOS', 'Photos');
+
+        const label = [bldg ? 'Bldg ' + bldg : '', addr].filter(Boolean).join(' · ') || 'No address';
+        const pClass = pri ? ' priority-' + pri.charAt(0) : '';
+        const pLabel = pri ? 'P' + pri.charAt(0) : '';
+        const pColorClass = pri ? ' p' + pri.charAt(0) : '';
+
+        const card = document.createElement('div');
+        card.className = 'card' + pClass;
+        card.innerHTML =
+          '<div class="card-top">' +
+            '<span class="card-addr">' + label + '</span>' +
+            (pLabel ? '<span class="card-priority' + pColorClass + '">' + pLabel + '</span>' : '') +
+          '</div>' +
+          (desc ? '<div class="card-desc">' + desc + '</div>' : '') +
+          '<div class="card-meta">' +
+            (loc ? '<span>📌 ' + loc + '</span>' : '') +
+            (eCat ? '<span>📋 ' + eCat + '</span>' : '') +
+            (budget ? '<span>💰 ' + budget + '</span>' : '') +
+            (eRev ? '<span>👤 ' + eRev + '</span>' : '') +
+          '</div>' +
+          (photos ? '<div class="card-photos"><a href="' + photos + '" target="_blank">📸 View photo</a></div>' : '');
+
+        entriesEl.appendChild(card);
+      });
+    }
+
+    filterText.oninput = render;
+    filterCat.onchange = render;
+    filterRev.onchange = render;
+    btnRefresh.onclick = load;
+    load();
+  </script>
+</body>
+</html>
