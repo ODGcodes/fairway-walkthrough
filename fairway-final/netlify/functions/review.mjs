@@ -34,22 +34,47 @@ export default async (req, context) => {
   try {
     const token = await getAccessToken();
     const range = encodeURIComponent(`'${SHEET_TAB}'!A2:P`);
-    const url = `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/${range}?majorDimension=ROWS`;
+    
+    // Fetch display values
+    const url = `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/${range}?majorDimension=ROWS&valueRenderOption=FORMATTED_VALUE`;
     const resp = await fetch(url, { headers: { 'Authorization': `Bearer ${token}` } });
     const data = await resp.json();
     if (data.error) throw new Error(JSON.stringify(data.error));
 
+    // Also fetch formulas to extract HYPERLINK URLs from column I
+    const formulaUrl = `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/${range}?majorDimension=ROWS&valueRenderOption=FORMULA`;
+    const formulaResp = await fetch(formulaUrl, { headers: { 'Authorization': `Bearer ${token}` } });
+    const formulaData = await formulaResp.json();
+
     const headers = data.values && data.values[0] ? data.values[0] : [];
     const rows = data.values ? data.values.slice(1) : [];
+    const formulaRows = formulaData.values ? formulaData.values.slice(1) : [];
 
-    // Convert to array of objects
-    const entries = rows
-      .filter(row => row.some(cell => cell && String(cell).trim()))
-      .map((row, idx) => {
-        const obj = { rowNumber: idx + 3 }; // data starts at row 3
-        headers.forEach((h, i) => { obj[h] = row[i] || ''; });
-        return obj;
-      });
+    // Find the index of the PHOTOS column
+    const photosIdx = headers.findIndex(h => h && h.toUpperCase().includes('PHOTO'));
+
+    // Convert to array of objects - process ALL rows to keep indices aligned with formula rows
+    const entries = [];
+    for (let idx = 0; idx < rows.length; idx++) {
+      const row = rows[idx];
+      // Skip completely empty rows
+      if (!row || !row.some(cell => cell && String(cell).trim())) continue;
+      
+      const obj = { rowNumber: idx + 3 }; // data starts at row 3 (idx 0 = row 3)
+      headers.forEach((h, i) => { obj[h] = row[i] || ''; });
+      
+      // If photos column has a HYPERLINK formula, extract the URL
+      if (photosIdx >= 0 && formulaRows[idx] && formulaRows[idx][photosIdx]) {
+        const formula = formulaRows[idx][photosIdx];
+        if (typeof formula === 'string' && formula.includes('HYPERLINK')) {
+          const match = formula.match(/HYPERLINK\("([^"]+)"/);
+          if (match) obj._photoUrl = match[1];
+        } else if (typeof formula === 'string' && formula.startsWith('http')) {
+          obj._photoUrl = formula;
+        }
+      }
+      entries.push(obj);
+    }
 
     return new Response(JSON.stringify({ headers, entries, total: entries.length }), {
       headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-cache' },
