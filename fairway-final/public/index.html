@@ -231,8 +231,8 @@
             else{fail++;const err=await resp.text();log("Upload fail "+fullName+": "+err);const div=document.createElement("div");div.innerHTML='❌ <span style="color:var(--red)">'+fullName+' failed</span>';photoSavedList.appendChild(div);}
           }catch(err){fail++;log("Upload error: "+(err?.message||err));const div=document.createElement("div");div.innerHTML='❌ <span style="color:var(--red)">Error: '+(err?.message||'unknown')+'</span>';photoSavedList.appendChild(div);}
         }
-        if(ok>0&&fail===0){photoStatus.textContent=ok+" photo(s) uploaded!";photoStatus.className="photo-status success";photoFileCamera.value="";photoFileGallery.value="";photoPreviewRow.innerHTML="";selectedFiles=[];btnUpload.disabled=true;}
-        else if(ok>0){photoStatus.textContent=ok+" uploaded, "+fail+" failed.";photoStatus.className="photo-status error";btnUpload.disabled=false;}
+        if(ok>0&&fail===0){photoStatus.textContent="✅ "+ok+" photo(s) uploaded! Take another or close.";photoStatus.className="photo-status success";photoFileCamera.value="";photoFileGallery.value="";photoPreviewRow.innerHTML="";selectedFiles=[];btnUpload.disabled=true;}
+        else if(ok>0){photoStatus.textContent=ok+" uploaded, "+fail+" failed.";photoStatus.className="photo-status error";photoFileCamera.value="";photoFileGallery.value="";photoPreviewRow.innerHTML="";selectedFiles=[];btnUpload.disabled=true;}
         else{photoStatus.textContent="Upload failed. Try again.";photoStatus.className="photo-status error";btnUpload.disabled=false;}
       };
       btnShowPhotos.onclick=showPhotoPanel;photoClose.onclick=hidePhotoPanel;
