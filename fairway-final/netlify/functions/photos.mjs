@@ -69,17 +69,17 @@ async function addPhotoUrlToSheet(photoUrl, address, bldgNumber, category) {
     if (bestRow < 0) bestRow = addrOnlyMatch;
     if (bestRow < 0) return { matched: false, reason: 'No matching row for address=' + address + ' bldg=' + bldgNumber + ' category=' + category };
 
-    // Build a short gallery link — use relative path that's short in the cell
+    // Build gallery link
     const addr = (address || '').toString().trim();
-    const cat = (category || '').toString().trim().replace(/[\s\/\.]+/g, '');
-    const shortPath = 'https://fairway-walkthrough.netlify.app/photos.html?' + 
-      (addr ? 'address=' + encodeURIComponent(addr) : '') +
-      (addr && cat ? '&' : '') +
-      (cat ? 'category=' + encodeURIComponent(cat) : '');
+    const cat = (category || '').toString().trim();
+    const params = new URLSearchParams();
+    if (addr) params.set('address', addr);
+    if (cat) params.set('category', cat);
+    const galleryUrl = 'https://fairway-walkthrough.netlify.app/photos.html?' + params.toString();
 
-    // Write HYPERLINK formula with short display text to keep the cell compact
-    const displayText = '📷 ' + (addr || 'Photos') + (cat ? ' ' + cat : '');
-    const cellValue = '=HYPERLINK("' + shortPath + '","' + displayText + '")';
+    // Write HYPERLINK formula with short display label (no emojis in formulas — they can break)
+    const displayLabel = 'Photos' + (addr ? ' ' + addr : '') + (cat ? ' ' + cat : '');
+    const cellValue = '=HYPERLINK("' + galleryUrl.replace(/"/g, '""') + '","' + displayLabel.replace(/"/g, '""') + '")';
 
     const rowNum = bestRow + 1;
     const writeRange = `'${SHEET_TAB}'!I${rowNum}`;
