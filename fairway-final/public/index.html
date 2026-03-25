@@ -16,11 +16,19 @@
       :root{--green-dark:#2B4C3F;--green-mid:#3D6B5A;--green-light:#E8F0EC;--gold:#C49A3C;--gold-light:#F5EDD8;--white:#FAFAF8;--gray-100:#F2F2EF;--gray-300:#D1D1CB;--gray-500:#8A8A82;--gray-800:#3A3A35;--red:#C0392B;--red-light:#FDECEA;--blue:#2980B9;--blue-light:#EBF5FB;--radius:16px;}
       *{margin:0;padding:0;box-sizing:border-box;}
       body{font-family:'DM Sans',system-ui,sans-serif;background:var(--green-dark);color:var(--gray-800);min-height:100vh;min-height:100dvh;display:flex;flex-direction:column;}
-      .header{background:var(--green-dark);color:var(--white);padding:20px 24px 16px;text-align:center;}
-      .header-icon{font-size:36px;margin-bottom:4px;}
-      .header h1{font-family:'DM Serif Display',Georgia,serif;font-size:26px;font-weight:400;letter-spacing:0.02em;line-height:1.2;}
-      .header .subtitle{font-size:14px;color:rgba(255,255,255,0.6);margin-top:4px;}
-      .main{flex:1;background:var(--white);border-radius:28px 28px 0 0;padding:32px 24px 40px;display:flex;flex-direction:column;gap:20px;overflow:hidden;width:100%;}
+      .header{background:var(--green-dark);color:var(--white);padding:14px 24px;text-align:center;}
+      .header h1{font-family:'DM Serif Display',Georgia,serif;font-size:22px;font-weight:400;letter-spacing:0.02em;line-height:1.2;}
+      .header .subtitle{font-size:13px;color:rgba(255,255,255,0.6);margin-top:2px;}
+      .main{flex:1;background:var(--white);border-radius:28px 28px 0 0;padding:24px 20px 40px;display:flex;flex-direction:column;gap:16px;overflow:hidden;width:100%;}
+
+      /* Field guide */
+      .field-guide{background:var(--gray-100);border-radius:12px;padding:14px 16px;border:1px solid var(--gray-300);}
+      .field-guide-title{font-size:14px;font-weight:700;color:var(--gray-800);margin-bottom:8px;}
+      .field-row{display:flex;align-items:baseline;gap:6px;padding:3px 0;font-size:13px;line-height:1.4;}
+      .field-icon{flex-shrink:0;width:20px;text-align:center;font-size:13px;}
+      .field-label{font-weight:700;color:var(--gray-800);white-space:nowrap;min-width:70px;}
+      .field-hint{color:var(--gray-500);font-size:12px;}
+      .field-hint.cats{font-size:11px;line-height:1.5;}
       .status-banner{display:flex;align-items:center;gap:14px;padding:18px 20px;border-radius:var(--radius);background:var(--gray-100);border:2px solid var(--gray-300);transition:all 0.4s ease;max-width:100%;}
       .status-banner.listening{background:var(--green-light);border-color:var(--green-mid);}
       .status-banner.error{background:var(--red-light);border-color:var(--red);}
@@ -86,13 +94,24 @@
   </head>
   <body>
     <div class="header">
-      <div class="header-icon">🏘️</div>
-      <h1>Fairway Homes<br/>Walkthrough Logger</h1>
-      <div class="subtitle">May 2026 Outdoor Inspection</div>
+      <h1>🏘️ Fairway Walkthrough</h1>
     </div>
     <div class="main">
       <div id="status-banner" class="status-banner"><div class="status-dot"></div><div><div class="status-text" id="status-text">Loading…</div><div class="status-sub" id="status-sub">Initializing voice SDK</div></div></div>
       <div class="timer" id="timer"></div>
+
+      <!-- Field guide — visible reference for board members -->
+      <div class="field-guide">
+        <div class="field-guide-title">Tell the assistant:</div>
+        <div class="field-row"><span class="field-icon">📍</span><span class="field-label">Address</span><span class="field-hint">2253 or range</span></div>
+        <div class="field-row"><span class="field-icon">🏢</span><span class="field-label">Building</span><span class="field-hint">Bldg 3, Cape, etc.</span></div>
+        <div class="field-row"><span class="field-icon">📌</span><span class="field-label">Location</span><span class="field-hint">front, rear, interior</span></div>
+        <div class="field-row"><span class="field-icon">📋</span><span class="field-label">Category</span><span class="field-hint cats">Landscaping · Tree Work · Roof Repair · Wood Rot · Power Wash · Pavement · Owner · Major GC · Minor GC</span></div>
+        <div class="field-row"><span class="field-icon">⚡</span><span class="field-label">Priority</span><span class="field-hint">1=urgent · 2=this yr · 3=next yr · 4=later</span></div>
+        <div class="field-row"><span class="field-icon">💰</span><span class="field-label">Budget</span><span class="field-hint">Operating or Reserve</span></div>
+        <div class="field-row"><span class="field-icon">📝</span><span class="field-label">Description</span><span class="field-hint">What needs to be done</span></div>
+      </div>
+
       <button class="btn btn-start" id="start" disabled><span class="btn-icon">🎙️</span> Start Walkthrough</button>
       <button class="btn btn-stop" id="stop" disabled><span class="btn-icon">⏹️</span> End Walkthrough</button>
       <div class="debug-log" id="debug-log"></div>
@@ -108,7 +127,7 @@
             <div class="manual-row"><input type="text" id="manual-desc" placeholder="Short description (optional)" /></div>
             <button class="btn btn-add-entry" id="btn-add-entry">+ Add to list</button>
           </div>
-          <label class="photo-file-label">📷 Tap to take or choose photo(s)<input type="file" accept="image/*" capture="environment" multiple class="photo-file-input" id="photo-file-input" /></label>
+          <label class="photo-file-label">📷 Tap to take or choose photo(s)<input type="file" accept="image/*" multiple class="photo-file-input" id="photo-file-input" /></label>
           <div id="photo-preview-row" class="photo-preview-row"></div>
           <button class="btn btn-upload" id="btn-upload" disabled><span class="btn-icon">☁️</span> Upload Photo(s)</button>
           <div id="photo-status" class="photo-status"></div>
@@ -168,10 +187,25 @@
       function generatePhotoName(e){const cat=(e.category||"General").replace(/[\s\/\.]+/g,""),addr=e.bldgNumber?"Bldg"+String(e.bldgNumber).replace(/\s+/g,""):(e.address||"NoAddr"),rev=e.reviewer||"Unknown",key=cat+"-"+addr;photoCounter[key]=(photoCounter[key]||0)+1;return cat+"-"+addr+"-"+rev+"-"+String(photoCounter[key]).padStart(2,"0");}
       function showPhotoPanel(){photoPanel.classList.add("visible");photoFileInput.value="";photoPreviewRow.innerHTML="";selectedFiles=[];btnUpload.disabled=true;photoStatus.textContent="";photoStatus.className="photo-status";if(sessionLog.length>0){const l=sessionLog[sessionLog.length-1];manualAddress.value=l.address||"";manualBldg.value=l.bldgNumber||"";manualCategory.value=l.category||"";}renderEntryList();photoPanel.scrollIntoView({behavior:"smooth",block:"start"});}
       function hidePhotoPanel(){photoPanel.classList.remove("visible");}
-      function checkUploadReady(){btnUpload.disabled=selectedFiles.length===0||selectedEntryIdx<0;}
+      function checkUploadReady(){
+        // Enable upload if we have files AND either an entry is selected or the form has data
+        const formHasData=manualAddress.value.trim()||manualBldg.value.trim()||manualDesc.value.trim();
+        btnUpload.disabled=selectedFiles.length===0||(selectedEntryIdx<0&&!formHasData);
+      }
       btnAddEntry.onclick=()=>{const a=manualAddress.value.trim(),b=manualBldg.value.trim(),c=manualCategory.value,d=manualDesc.value.trim();if(!a&&!b&&!d)return;addSessionEntry({address:a,bldgNumber:b,category:c,description:d});manualDesc.value="";};
       photoFileInput.addEventListener("change",e=>{selectedFiles=Array.from(e.target.files);photoPreviewRow.innerHTML="";selectedFiles.forEach(f=>{const img=document.createElement("img");img.src=URL.createObjectURL(f);photoPreviewRow.appendChild(img);});photoStatus.textContent=selectedFiles.length+" photo(s) selected";photoStatus.className="photo-status";checkUploadReady();});
+      // Also check upload ready when form fields change
+      manualAddress.oninput=checkUploadReady;
+      manualBldg.oninput=checkUploadReady;
+      manualCategory.onchange=checkUploadReady;
+      manualDesc.oninput=checkUploadReady;
       btnUpload.onclick=async()=>{
+        // If no entry selected but form has data, auto-create one
+        if(selectedEntryIdx<0){
+          const a=manualAddress.value.trim(),b=manualBldg.value.trim(),c=manualCategory.value,d=manualDesc.value.trim();
+          if(!a&&!b&&!d){photoStatus.textContent="Enter address or building first";photoStatus.className="photo-status error";return;}
+          addSessionEntry({address:a,bldgNumber:b,category:c,description:d});
+        }
         if(selectedFiles.length===0||selectedEntryIdx<0)return;
         const entry=sessionLog[selectedEntryIdx];btnUpload.disabled=true;
         photoStatus.textContent="Uploading…";photoStatus.className="photo-status";
