@@ -1,6 +1,3 @@
-Index · HTML
-Copy
-
 <!doctype html>
 <html lang="en">
   <head>
@@ -47,17 +44,17 @@ Copy
       .photo-panel{display:none;border:2px solid var(--blue);border-radius:var(--radius);overflow:hidden;}
       .photo-panel.visible{display:block;}
       .photo-header{background:var(--blue);color:white;padding:14px 18px;font-size:17px;font-weight:700;display:flex;align-items:center;gap:10px;}
-      .photo-body{padding:18px;background:var(--blue-light);display:flex;flex-direction:column;gap:14px;}
-      .photo-entry-list{list-style:none;}
+      .photo-body{padding:18px;background:var(--blue-light);display:flex;flex-direction:column;gap:14px;overflow:hidden;max-width:100%;}
+      .photo-entry-list{list-style:none;max-width:100%;}
       .photo-entry-list:empty{display:none;}
-      .photo-entry-list li{padding:12px 14px;margin-bottom:6px;background:white;border-radius:10px;border:2px solid var(--gray-300);cursor:pointer;font-size:15px;line-height:1.4;overflow:hidden;word-break:break-word;}
+      .photo-entry-list li{padding:12px 14px;margin-bottom:6px;background:white;border-radius:10px;border:2px solid var(--gray-300);cursor:pointer;font-size:15px;line-height:1.4;overflow:hidden;word-break:break-word;max-width:100%;}
       .photo-entry-list li.selected{border-color:var(--blue);box-shadow:0 0 0 2px rgba(41,128,185,0.2);}
-      .photo-entry-list li .entry-addr{font-weight:700;overflow:hidden;text-overflow:ellipsis;}
-      .photo-entry-list li .entry-desc{color:var(--gray-500);font-size:13px;overflow:hidden;text-overflow:ellipsis;}
-      .manual-entry{background:white;border-radius:12px;padding:16px;border:1px solid var(--gray-300);}
+      .photo-entry-list li .entry-addr{font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+      .photo-entry-list li .entry-desc{color:var(--gray-500);font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+      .manual-entry{background:white;border-radius:12px;padding:16px;border:1px solid var(--gray-300);overflow:hidden;}
       .manual-entry-title{font-size:15px;font-weight:700;margin-bottom:10px;}
-      .manual-row{display:flex;gap:10px;margin-bottom:10px;}
-      .manual-row input,.manual-row select{flex:1;padding:12px;border:2px solid var(--gray-300);border-radius:10px;font-family:'DM Sans',system-ui,sans-serif;font-size:16px;background:white;-webkit-appearance:none;}
+      .manual-row{display:flex;gap:10px;margin-bottom:10px;max-width:100%;}
+      .manual-row input,.manual-row select{flex:1;min-width:0;padding:12px;border:2px solid var(--gray-300);border-radius:10px;font-family:'DM Sans',system-ui,sans-serif;font-size:16px;background:white;-webkit-appearance:none;}
       .manual-row input:focus,.manual-row select:focus{outline:none;border-color:var(--blue);}
       .manual-row input::placeholder{color:var(--gray-500);}
       .btn-add-entry{background:var(--green-dark);color:white;font-size:16px;padding:14px;border-radius:10px;}
@@ -154,10 +151,19 @@ Copy
       function getReviewerFromUrl(){return(new URLSearchParams(window.location.search).get("reviewer")||"").trim();}
       function startTimer(){startTime=Date.now();timerInterval=setInterval(()=>{const e=Math.floor((Date.now()-startTime)/1000);timerEl.textContent=String(Math.floor(e/60)).padStart(2,"0")+":"+String(e%60).padStart(2,"0");},1000);}
       function stopTimer(){clearInterval(timerInterval);timerInterval=null;}
+      function populateFormFromEntry(idx){
+        if(idx>=0&&idx<sessionLog.length){
+          const e=sessionLog[idx];
+          manualAddress.value=e.address||"";
+          manualBldg.value=e.bldgNumber||"";
+          manualCategory.value=e.category||"";
+          manualDesc.value=e.description||"";
+        }
+      }
       function renderEntryList(){
         photoEntryList.innerHTML="";
-        sessionLog.forEach((e,i)=>{const li=document.createElement("li");const label=[e.bldgNumber?"Bldg "+e.bldgNumber:"",e.address].filter(Boolean).join(" · ")||"No address";li.innerHTML='<div class="entry-addr">'+label+(e.category?" — "+e.category:"")+'</div><div class="entry-desc">'+(e.description||"")+'</div>';if(i===selectedEntryIdx)li.classList.add("selected");li.onclick=()=>{selectedEntryIdx=i;renderEntryList();checkUploadReady();};photoEntryList.appendChild(li);});
-        if(sessionLog.length>0&&(selectedEntryIdx<0||selectedEntryIdx>=sessionLog.length)){selectedEntryIdx=sessionLog.length-1;renderEntryList();}
+        sessionLog.forEach((e,i)=>{const li=document.createElement("li");const label=[e.bldgNumber?"Bldg "+e.bldgNumber:"",e.address].filter(Boolean).join(" · ")||"No address";li.innerHTML='<div class="entry-addr">'+label+(e.category?" — "+e.category:"")+'</div><div class="entry-desc">'+(e.description||"")+'</div>';if(i===selectedEntryIdx)li.classList.add("selected");li.onclick=()=>{selectedEntryIdx=i;renderEntryList();populateFormFromEntry(i);checkUploadReady();};photoEntryList.appendChild(li);});
+        if(sessionLog.length>0&&(selectedEntryIdx<0||selectedEntryIdx>=sessionLog.length)){selectedEntryIdx=sessionLog.length-1;renderEntryList();populateFormFromEntry(selectedEntryIdx);}
       }
       function generatePhotoName(e){const cat=(e.category||"General").replace(/[\s\/\.]+/g,""),addr=e.bldgNumber?"Bldg"+String(e.bldgNumber).replace(/\s+/g,""):(e.address||"NoAddr"),rev=e.reviewer||"Unknown",key=cat+"-"+addr;photoCounter[key]=(photoCounter[key]||0)+1;return cat+"-"+addr+"-"+rev+"-"+String(photoCounter[key]).padStart(2,"0");}
       function showPhotoPanel(){photoPanel.classList.add("visible");photoFileInput.value="";photoPreviewRow.innerHTML="";selectedFiles=[];btnUpload.disabled=true;photoStatus.textContent="";photoStatus.className="photo-status";if(sessionLog.length>0){const l=sessionLog[sessionLog.length-1];manualAddress.value=l.address||"";manualBldg.value=l.bldgNumber||"";manualCategory.value=l.category||"";}renderEntryList();photoPanel.scrollIntoView({behavior:"smooth",block:"start"});}
