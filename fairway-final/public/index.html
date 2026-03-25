@@ -167,7 +167,7 @@
       const ASSISTANT_ID="24383100-a8e8-421c-8259-b380fcd0b4c4";
       const PUBLIC_KEY="31654b18-d9a7-4ded-b324-8f6d22c7fd1d";
       const PHOTO_API="/api/photos";
-      const CATEGORIES=["Landscaping","Tree Work","Roof Repair","Wood Rot","Power Wash","Pavement","Owner","Other"];
+      const CATEGORIES=["Landscaping","Tree Work","Roof Repair","Wood Rot","Power Wash","Pavement/SW","Owner Resp.","Major GC","Minor GC"];
       const ALLOWED_REVIEWERS=new Set(["Cindy","Pat","Rick","Dave","Nick","Kathy","Will"]);
       const sessionLog=[];const photoCounter={};
       function addSessionEntry(e){sessionLog.push({address:e.address||"",bldgNumber:e.bldgNumber||"",category:e.category||"",description:e.description||"",reviewer:e.reviewer||getReviewerFromUrl(),timestamp:e.timestamp||new Date().toISOString()});renderEntryList();}
