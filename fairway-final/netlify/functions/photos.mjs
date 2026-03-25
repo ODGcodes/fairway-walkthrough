@@ -75,14 +75,18 @@ async function addPhotoUrlToSheet(photoUrl, address, bldgNumber, category) {
     if (category) params.set('category', category.toString().trim());
     const galleryUrl = 'https://fairway-walkthrough.netlify.app/photos.html?' + params.toString();
 
-    // Write gallery link to column I — one clean link per row
-    const rowNum = bestRow + 1; // convert 0-indexed to 1-indexed
+    // Write as a clickable HYPERLINK formula with short label
+    const label = '📷 Photos';
+    const cellValue = '=HYPERLINK("' + galleryUrl + '","' + label + '")';
+
+    // Write to column I — same formula regardless of how many photos (gallery shows all)
+    const rowNum = bestRow + 1;
     const writeRange = `'${SHEET_TAB}'!I${rowNum}`;
     const writeUrl = `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/${encodeURIComponent(writeRange)}?valueInputOption=USER_ENTERED`;
     const writeResp = await fetch(writeUrl, {
       method: 'PUT',
       headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ range: writeRange, majorDimension: 'ROWS', values: [[galleryUrl]] }),
+      body: JSON.stringify({ range: writeRange, majorDimension: 'ROWS', values: [[cellValue]] }),
     });
     const writeData = await writeResp.json();
     if (writeData.error) return { matched: false, reason: JSON.stringify(writeData.error) };
