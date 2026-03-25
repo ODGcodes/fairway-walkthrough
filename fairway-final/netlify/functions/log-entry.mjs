@@ -6,7 +6,9 @@ const RANGE = `'${SHEET_TAB}'!A3:P`;
 
 async function getAccessToken() {
   const email = Netlify.env.get('GOOGLE_SERVICE_ACCOUNT_EMAIL');
-  const rawKey = Netlify.env.get('GOOGLE_PRIVATE_KEY').replace(/\\n/g, '\n');
+  let rawKey = Netlify.env.get('GOOGLE_PRIVATE_KEY');
+  // Handle double-escaped or literal \n in the key
+  rawKey = rawKey.replace(/\\\\n/g, '\n').replace(/\\n/g, '\n');
   const privateKey = await importPKCS8(rawKey, 'RS256');
   const now = Math.floor(Date.now() / 1000);
   const jwt = await new SignJWT({
@@ -30,14 +32,28 @@ async function getAccessToken() {
 }
 
 async function appendRow(accessToken, values) {
-  const url = `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/${encodeURIComponent(RANGE)}:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`;
+  // First, find the next empty row by checking column A
+  const findUrl = `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/${encodeURIComponent("'" + SHEET_TAB + "'!A:A")}?majorDimension=COLUMNS`;
+  const findResp = await fetch(findUrl, {
+    headers: { 'Authorization': `Bearer ${accessToken}` },
+  });
+  const findData = await findResp.json();
+  // Next empty row = length of column A values + 1 (but at least row 3)
+  const lastRow = findData.values && findData.values[0] ? findData.values[0].length : 2;
+  const nextRow = Math.max(lastRow + 1, 3);
+
+  // Write directly to the exact row using update (not append)
+  const writeRange = `'${SHEET_TAB}'!A${nextRow}:P${nextRow}`;
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/${encodeURIComponent(writeRange)}?valueInputOption=USER_ENTERED`;
   const resp = await fetch(url, {
-    method: 'POST',
+    method: 'PUT',
     headers: {
       'Authorization': `Bearer ${accessToken}`,
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
+      range: writeRange,
+      majorDimension: 'ROWS',
       values: [values],
     }),
   });
