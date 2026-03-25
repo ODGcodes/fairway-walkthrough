@@ -145,6 +145,17 @@
         const pLabel = pri ? 'P' + pri.charAt(0) : '';
         const pColorClass = pri ? ' p' + pri.charAt(0) : '';
 
+        // Extract photo URL — handle plain URLs, HYPERLINK formulas, or display text
+        let photoLink = '';
+        if (photos) {
+          if (photos.startsWith('http')) {
+            photoLink = photos;
+          } else if (photos.includes('HYPERLINK')) {
+            const match = photos.match(/HYPERLINK\("([^"]+)"/);
+            if (match) photoLink = match[1];
+          }
+        }
+
         const card = document.createElement('div');
         card.className = 'card' + pClass;
         card.innerHTML =
@@ -159,7 +170,7 @@
             (budget ? '<span>💰 ' + budget + '</span>' : '') +
             (eRev ? '<span>👤 ' + eRev + '</span>' : '') +
           '</div>' +
-          (photos ? '<div class="card-photos"><a href="' + photos + '" target="_blank">📸 View photo</a></div>' : '');
+          (photoLink ? '<div class="card-photos"><a href="' + photoLink + '" target="_blank">📸 View photos</a></div>' : '');
 
         entriesEl.appendChild(card);
       });
