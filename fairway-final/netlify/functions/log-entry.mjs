@@ -74,16 +74,24 @@ export default async (req, context) => {
   try {
     const body = await req.json();
 
-    // Vapi sends tool calls wrapped in a message object
-    // Extract the actual arguments from Vapi's format or use raw body
+    // Vapi sends tool calls as message.toolCallList (per Vapi docs)
+    // Also handle direct POST body for manual testing
     let args = body;
     let toolCallId = null;
-    if (body.message && body.message.toolCalls) {
+    if (body.message && body.message.toolCallList) {
+      // Official Vapi format: message.toolCallList[0].id and .arguments
+      const call = body.message.toolCallList[0];
+      toolCallId = call.id;
+      args = call.arguments || {};
+      if (typeof args === 'string') args = JSON.parse(args);
+    } else if (body.message && body.message.toolCalls) {
+      // Fallback: older format
       const call = body.message.toolCalls[0];
       toolCallId = call.id;
-      args = call.function?.arguments || {};
+      args = call.function?.arguments || call.arguments || {};
       if (typeof args === 'string') args = JSON.parse(args);
     } else if (body.message && body.message.functionCall) {
+      // Fallback: function-call format
       toolCallId = body.message.functionCall.id;
       args = body.message.functionCall.parameters || {};
       if (typeof args === 'string') args = JSON.parse(args);
