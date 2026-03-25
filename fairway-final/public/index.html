@@ -117,7 +117,7 @@
       <button class="btn btn-stop" id="stop" disabled><span class="btn-icon">⏹️</span> End Walkthrough</button>
       <div class="debug-log" id="debug-log"></div>
       <button class="btn" id="btn-show-photos" style="background:var(--blue);color:white;font-size:18px;padding:16px;"><span class="btn-icon">📸</span> Add Photo</button>
-      <a href="/review.html" class="btn" style="background:var(--gray-100);color:var(--gray-800);font-size:16px;padding:14px;border:2px solid var(--gray-300);text-decoration:none;"><span class="btn-icon">📋</span> Review Entries</a>
+      <a id="review-link" href="/review.html" class="btn" style="background:var(--gray-100);color:var(--gray-800);font-size:16px;padding:14px;border:2px solid var(--gray-300);text-decoration:none;"><span class="btn-icon">📋</span> Review Entries</a>
       <div id="photo-panel" class="photo-panel">
         <div class="photo-header"><span style="font-size:22px;">📸</span> Upload Photo</div>
         <div class="photo-body">
@@ -210,6 +210,25 @@
       manualBldg.oninput=checkUploadReady;
       manualCategory.onchange=checkUploadReady;
       manualDesc.oninput=checkUploadReady;
+      // Compress image to max 1200px wide and JPEG quality 0.8 to stay under Netlify's payload limit
+      function compressImage(file, maxWidth=1200, quality=0.8){
+        return new Promise((resolve,reject)=>{
+          const img=new Image();
+          img.onload=()=>{
+            let w=img.width,h=img.height;
+            if(w>maxWidth){h=Math.round(h*(maxWidth/w));w=maxWidth;}
+            const canvas=document.createElement('canvas');
+            canvas.width=w;canvas.height=h;
+            const ctx=canvas.getContext('2d');
+            ctx.drawImage(img,0,0,w,h);
+            const dataUrl=canvas.toDataURL('image/jpeg',quality);
+            resolve(dataUrl.split(',')[1]);
+          };
+          img.onerror=()=>reject(new Error('Failed to load image'));
+          img.src=URL.createObjectURL(file);
+        });
+      }
+
       btnUpload.onclick=async()=>{
         // If no entry selected but form has data, auto-create one
         if(selectedEntryIdx<0){
@@ -222,11 +241,12 @@
         photoStatus.textContent="Uploading "+selectedFiles.length+" photo(s)…";photoStatus.className="photo-status";
         let ok=0,fail=0;
         for(const file of selectedFiles){
-          const name=generatePhotoName(entry),ext=file.name.split(".").pop()||"jpg",fullName=name+"."+ext;
+          const name=generatePhotoName(entry),fullName=name+".jpg";
           try{
+            photoStatus.textContent="Compressing "+fullName+"…";
+            const b64=await compressImage(file);
             photoStatus.textContent="Uploading "+fullName+"…";
-            const b64=await new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(r.result.split(",")[1]);r.onerror=()=>rej(r.error);r.readAsDataURL(file);});
-            const resp=await fetch(PHOTO_API,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({photoName:fullName,address:entry.address,bldgNumber:entry.bldgNumber,category:entry.category,description:entry.description,reviewer:entry.reviewer,timestamp:new Date().toISOString(),fileBase64:b64,fileMimeType:file.type||"image/jpeg"})});
+            const resp=await fetch(PHOTO_API,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({photoName:fullName,address:entry.address,bldgNumber:entry.bldgNumber,category:entry.category,description:entry.description,reviewer:entry.reviewer,timestamp:new Date().toISOString(),fileBase64:b64,fileMimeType:"image/jpeg"})});
             if(resp.ok){ok++;const result=await resp.json();const div=document.createElement("div");div.innerHTML='✅ <span class="saved-name">'+fullName+'</span>'+(result.sheet&&result.sheet.matched?' (linked to row '+result.sheet.row+')':' (not linked to sheet)');photoSavedList.appendChild(div);}
             else{fail++;const err=await resp.text();log("Upload fail "+fullName+": "+err);const div=document.createElement("div");div.innerHTML='❌ <span style="color:var(--red)">'+fullName+' failed</span>';photoSavedList.appendChild(div);}
           }catch(err){fail++;log("Upload error: "+(err?.message||err));const div=document.createElement("div");div.innerHTML='❌ <span style="color:var(--red)">Error: '+(err?.message||'unknown')+'</span>';photoSavedList.appendChild(div);}
@@ -251,6 +271,9 @@
           log("Vapi error: "+msg);setStatus("error","Error","See details below");startBtn.disabled=false;stopBtn.disabled=true;stopTimer();timerEl.textContent="";
         });
         const reviewer=getReviewerFromUrl();
+        // Pass reviewer to review page link
+        const reviewLink=document.getElementById('review-link');
+        if(reviewer)reviewLink.href='/review.html?reviewer='+encodeURIComponent(reviewer);
         if(!reviewer){setStatus("error","Missing reviewer","Open with ?reviewer=Name (e.g., ?reviewer=Cindy)");startBtn.disabled=true;}
         else if(!ALLOWED_REVIEWERS.has(reviewer)){setStatus("error","Unknown reviewer","Use one of: "+Array.from(ALLOWED_REVIEWERS).join(", "));startBtn.disabled=true;}
         else{setStatus("","Ready","Reviewer: "+reviewer+". Tap below to start.");startBtn.disabled=false;}
