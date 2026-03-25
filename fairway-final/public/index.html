@@ -66,9 +66,10 @@
       .manual-row input:focus,.manual-row select:focus{outline:none;border-color:var(--blue);}
       .manual-row input::placeholder{color:var(--gray-500);}
       .btn-add-entry{background:var(--green-dark);color:white;font-size:16px;padding:14px;border-radius:10px;}
-      .photo-file-label{display:flex;align-items:center;justify-content:center;gap:10px;padding:16px;background:white;border:2px dashed var(--gray-300);border-radius:12px;font-size:17px;font-weight:600;cursor:pointer;}
+      .photo-file-label{display:flex;align-items:center;justify-content:center;gap:10px;padding:16px;background:white;border:2px dashed var(--gray-300);border-radius:12px;font-size:17px;font-weight:600;cursor:pointer;flex:1;min-width:0;}
       .photo-file-label:active{background:var(--gray-100);}
       .photo-file-input{display:none;}
+      .photo-btn-row{display:flex;gap:10px;width:100%;}
       .photo-preview-row{display:flex;gap:8px;flex-wrap:wrap;}
       .photo-preview-row img{width:72px;height:72px;object-fit:cover;border-radius:8px;border:2px solid var(--gray-300);}
       .btn-upload{background:var(--blue);color:white;font-size:18px;padding:16px;}
@@ -127,7 +128,10 @@
             <div class="manual-row"><input type="text" id="manual-desc" placeholder="Short description (optional)" /></div>
             <button class="btn btn-add-entry" id="btn-add-entry">+ Add to list</button>
           </div>
-          <label class="photo-file-label">📷 Tap to take or choose photo(s)<input type="file" accept="image/*" multiple class="photo-file-input" id="photo-file-input" /></label>
+          <div class="photo-btn-row">
+            <label class="photo-file-label photo-camera-label">📷 Take Photo<input type="file" accept="image/*" capture="environment" multiple class="photo-file-input" id="photo-file-camera" /></label>
+            <label class="photo-file-label photo-gallery-label">🖼️ Gallery<input type="file" accept="image/*" multiple class="photo-file-input" id="photo-file-gallery" /></label>
+          </div>
           <div id="photo-preview-row" class="photo-preview-row"></div>
           <button class="btn btn-upload" id="btn-upload" disabled><span class="btn-icon">☁️</span> Upload Photo(s)</button>
           <div id="photo-status" class="photo-status"></div>
@@ -162,7 +166,7 @@
       const ALLOWED_REVIEWERS=new Set(["Cindy","Pat","Rick","Dave","Nick","Kathy","Will"]);
       const sessionLog=[];const photoCounter={};
       function addSessionEntry(e){sessionLog.push({address:e.address||"",bldgNumber:e.bldgNumber||"",category:e.category||"",description:e.description||"",reviewer:e.reviewer||getReviewerFromUrl(),timestamp:e.timestamp||new Date().toISOString()});renderEntryList();}
-      const statusBanner=document.getElementById("status-banner"),statusText=document.getElementById("status-text"),statusSub=document.getElementById("status-sub"),timerEl=document.getElementById("timer"),startBtn=document.getElementById("start"),stopBtn=document.getElementById("stop"),debugLog=document.getElementById("debug-log"),photoPanel=document.getElementById("photo-panel"),photoEntryList=document.getElementById("photo-entry-list"),photoFileInput=document.getElementById("photo-file-input"),photoPreviewRow=document.getElementById("photo-preview-row"),btnUpload=document.getElementById("btn-upload"),photoStatus=document.getElementById("photo-status"),photoSavedList=document.getElementById("photo-saved-list"),btnShowPhotos=document.getElementById("btn-show-photos"),btnAddEntry=document.getElementById("btn-add-entry"),manualAddress=document.getElementById("manual-address"),manualBldg=document.getElementById("manual-bldg"),manualCategory=document.getElementById("manual-category"),manualDesc=document.getElementById("manual-desc"),photoClose=document.getElementById("photo-close");
+      const statusBanner=document.getElementById("status-banner"),statusText=document.getElementById("status-text"),statusSub=document.getElementById("status-sub"),timerEl=document.getElementById("timer"),startBtn=document.getElementById("start"),stopBtn=document.getElementById("stop"),debugLog=document.getElementById("debug-log"),photoPanel=document.getElementById("photo-panel"),photoEntryList=document.getElementById("photo-entry-list"),photoFileCamera=document.getElementById("photo-file-camera"),photoFileGallery=document.getElementById("photo-file-gallery"),photoPreviewRow=document.getElementById("photo-preview-row"),btnUpload=document.getElementById("btn-upload"),photoStatus=document.getElementById("photo-status"),photoSavedList=document.getElementById("photo-saved-list"),btnShowPhotos=document.getElementById("btn-show-photos"),btnAddEntry=document.getElementById("btn-add-entry"),manualAddress=document.getElementById("manual-address"),manualBldg=document.getElementById("manual-bldg"),manualCategory=document.getElementById("manual-category"),manualDesc=document.getElementById("manual-desc"),photoClose=document.getElementById("photo-close");
       let vapi=null,timerInterval=null,startTime=null,selectedEntryIdx=-1,selectedFiles=[];
       CATEGORIES.forEach(c=>{const o=document.createElement("option");o.value=c;o.textContent=c;manualCategory.appendChild(o);});
       function setStatus(s,t,sub){statusBanner.className="status-banner "+(s||"");statusText.textContent=t;statusSub.textContent=sub||"";}
@@ -185,15 +189,17 @@
         if(sessionLog.length>0&&(selectedEntryIdx<0||selectedEntryIdx>=sessionLog.length)){selectedEntryIdx=sessionLog.length-1;renderEntryList();populateFormFromEntry(selectedEntryIdx);}
       }
       function generatePhotoName(e){const cat=(e.category||"General").replace(/[\s\/\.]+/g,""),addr=e.bldgNumber?"Bldg"+String(e.bldgNumber).replace(/\s+/g,""):(e.address||"NoAddr"),rev=e.reviewer||"Unknown",key=cat+"-"+addr;photoCounter[key]=(photoCounter[key]||0)+1;return cat+"-"+addr+"-"+rev+"-"+String(photoCounter[key]).padStart(2,"0");}
-      function showPhotoPanel(){photoPanel.classList.add("visible");photoFileInput.value="";photoPreviewRow.innerHTML="";selectedFiles=[];btnUpload.disabled=true;photoStatus.textContent="";photoStatus.className="photo-status";if(sessionLog.length>0){const l=sessionLog[sessionLog.length-1];manualAddress.value=l.address||"";manualBldg.value=l.bldgNumber||"";manualCategory.value=l.category||"";}renderEntryList();photoPanel.scrollIntoView({behavior:"smooth",block:"start"});}
+      function showPhotoPanel(){photoPanel.classList.add("visible");photoFileCamera.value="";photoFileGallery.value="";photoPreviewRow.innerHTML="";selectedFiles=[];btnUpload.disabled=true;photoStatus.textContent="";photoStatus.className="photo-status";if(sessionLog.length>0){const l=sessionLog[sessionLog.length-1];manualAddress.value=l.address||"";manualBldg.value=l.bldgNumber||"";manualCategory.value=l.category||"";}renderEntryList();photoPanel.scrollIntoView({behavior:"smooth",block:"start"});}
       function hidePhotoPanel(){photoPanel.classList.remove("visible");}
       function checkUploadReady(){
         // Enable upload if we have files AND either an entry is selected or the form has data
         const formHasData=manualAddress.value.trim()||manualBldg.value.trim()||manualDesc.value.trim();
         btnUpload.disabled=selectedFiles.length===0||(selectedEntryIdx<0&&!formHasData);
       }
+      function handleFileSelect(e){selectedFiles=Array.from(e.target.files);photoPreviewRow.innerHTML="";selectedFiles.forEach(f=>{const img=document.createElement("img");img.src=URL.createObjectURL(f);photoPreviewRow.appendChild(img);});photoStatus.textContent=selectedFiles.length+" photo(s) selected";photoStatus.className="photo-status";checkUploadReady();}
       btnAddEntry.onclick=()=>{const a=manualAddress.value.trim(),b=manualBldg.value.trim(),c=manualCategory.value,d=manualDesc.value.trim();if(!a&&!b&&!d)return;addSessionEntry({address:a,bldgNumber:b,category:c,description:d});manualDesc.value="";};
-      photoFileInput.addEventListener("change",e=>{selectedFiles=Array.from(e.target.files);photoPreviewRow.innerHTML="";selectedFiles.forEach(f=>{const img=document.createElement("img");img.src=URL.createObjectURL(f);photoPreviewRow.appendChild(img);});photoStatus.textContent=selectedFiles.length+" photo(s) selected";photoStatus.className="photo-status";checkUploadReady();});
+      photoFileCamera.addEventListener("change",handleFileSelect);
+      photoFileGallery.addEventListener("change",handleFileSelect);
       // Also check upload ready when form fields change
       manualAddress.oninput=checkUploadReady;
       manualBldg.oninput=checkUploadReady;
