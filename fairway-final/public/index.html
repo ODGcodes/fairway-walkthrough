@@ -257,6 +257,20 @@
       }catch(err){log("Init failed: "+err.message);setStatus("error","SDK failed to load","See details below");}
       startBtn.onclick=async()=>{if(!vapi){log("Vapi not init");return;}const r=getReviewerFromUrl();if(!r||!ALLOWED_REVIEWERS.has(r)){setStatus("error","Missing/invalid reviewer","Use ?reviewer=Cindy");return;}setStatus("","Connecting…","Reviewer: "+r);startBtn.disabled=true;timerEl.textContent="";debugLog.classList.remove("visible");debugLog.textContent="";try{await vapi.start(ASSISTANT_ID,{variableValues:{reviewerName:r}});}catch(err){log("Start failed: "+(err?.message||JSON.stringify(err)));setStatus("error","Could not connect","See details below");startBtn.disabled=false;}};
       stopBtn.onclick=async()=>{if(!vapi)return;setStatus("","Ending…","Please wait");stopBtn.disabled=true;try{await vapi.stop();}catch(err){log("Stop: "+(err?.message||err));}};
+
+      // Check for pre-filled photo params (from Review Entries page)
+      const urlParams=new URLSearchParams(window.location.search);
+      const prefillAddr=urlParams.get('photoAddr');
+      const prefillBldg=urlParams.get('photoBldg');
+      const prefillCat=urlParams.get('photoCat');
+      if(prefillAddr||prefillBldg||prefillCat||window.location.hash==='#photo'){
+        setTimeout(()=>{
+          if(prefillAddr)manualAddress.value=prefillAddr;
+          if(prefillBldg)manualBldg.value=prefillBldg;
+          if(prefillCat)manualCategory.value=prefillCat;
+          showPhotoPanel();
+        },500);
+      }
     </script>
   </body>
 </html>
