@@ -241,7 +241,15 @@
         vapi.on("call-start",()=>{setStatus("listening","Listening…","Describe what you see");startBtn.disabled=true;stopBtn.disabled=false;debugLog.classList.remove("visible");debugLog.textContent="";startTimer();});
         vapi.on("call-end",()=>{setStatus("","Done!","Session ended — add photos below if needed");startBtn.disabled=false;stopBtn.disabled=true;stopTimer();timerEl.textContent="";});
         vapi.on("message",msg=>{try{let calls=[];if(msg?.type==="tool-calls"&&Array.isArray(msg.toolCalls))calls=msg.toolCalls;else if(msg?.type==="function-call"&&msg.functionCall)calls=[msg.functionCall];calls.forEach(call=>{const n=call.name||call.function?.name||"";if(n==="append_walkthrough_row"){const raw=call.parameters||call.function?.arguments||call.arguments||{};const a=typeof raw==="string"?JSON.parse(raw):raw;addSessionEntry({address:a.address||"",bldgNumber:a.bldgNumber||"",category:a.majorCategory||a.minorCategory||a.category||"",description:a.descriptionActionNeeded||a.description||"",reviewer:a.reviewPerson||getReviewerFromUrl()});console.log("[FW] Auto-captured:",sessionLog[sessionLog.length-1]);}});}catch(e){console.warn("[FW] msg parse:",e);}});
-        vapi.on("error",e=>{log("Vapi error: "+(e?.message||JSON.stringify(e)));setStatus("error","Error","See details below");startBtn.disabled=false;stopBtn.disabled=true;stopTimer();timerEl.textContent="";});
+        vapi.on("error",e=>{
+          const msg=e?.message||e?.errorMsg||JSON.stringify(e);
+          // Ignore "room deleted" / "meeting ended" errors — these are normal after the call ends
+          if(msg.includes("no-room")||msg.includes("Meeting has ended")||msg.includes("room was deleted")){
+            console.log("[FW] Ignoring post-call room cleanup:",msg);
+            return;
+          }
+          log("Vapi error: "+msg);setStatus("error","Error","See details below");startBtn.disabled=false;stopBtn.disabled=true;stopTimer();timerEl.textContent="";
+        });
         const reviewer=getReviewerFromUrl();
         if(!reviewer){setStatus("error","Missing reviewer","Open with ?reviewer=Name (e.g., ?reviewer=Cindy)");startBtn.disabled=true;}
         else if(!ALLOWED_REVIEWERS.has(reviewer)){setStatus("error","Unknown reviewer","Use one of: "+Array.from(ALLOWED_REVIEWERS).join(", "));startBtn.disabled=true;}
