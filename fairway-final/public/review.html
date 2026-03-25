@@ -36,6 +36,10 @@
     .card-meta span{background:var(--gray-100);padding:3px 10px;border-radius:6px;}
     .card-photos{margin-top:8px;}
     .card-photos a{color:var(--blue);font-size:13px;font-weight:600;text-decoration:none;}
+    .card-actions{display:flex;gap:8px;margin-top:10px;}
+    .card-btn{display:inline-block;padding:6px 14px;border-radius:8px;font-size:13px;font-weight:700;text-decoration:none;text-align:center;}
+    .card-btn.photo-btn{background:var(--blue);color:white;}
+    .card-btn.add-photo-btn{background:var(--gray-100);color:var(--gray-800);border:2px solid var(--gray-300);}
 
     .empty{text-align:center;padding:60px 20px;color:var(--gray-500);font-size:16px;}
     .loading{text-align:center;padding:60px 20px;color:var(--gray-500);}
@@ -156,6 +160,15 @@
           }
         }
 
+        // Build "Add Photo" link that opens the main app with fields pre-filled
+        const addPhotoParams = new URLSearchParams();
+        const rev = new URLSearchParams(window.location.search).get('reviewer') || '';
+        if (rev) addPhotoParams.set('reviewer', rev);
+        if (addr) addPhotoParams.set('photoAddr', addr);
+        if (bldg) addPhotoParams.set('photoBldg', bldg);
+        if (eCat) addPhotoParams.set('photoCat', eCat);
+        const addPhotoUrl = '/?' + addPhotoParams.toString() + '#photo';
+
         const card = document.createElement('div');
         card.className = 'card' + pClass;
         card.innerHTML =
@@ -170,7 +183,10 @@
             (budget ? '<span>💰 ' + budget + '</span>' : '') +
             (eRev ? '<span>👤 ' + eRev + '</span>' : '') +
           '</div>' +
-          (photoLink ? '<div class="card-photos"><a href="' + photoLink + '" target="_blank">📸 View photos</a></div>' : '');
+          '<div class="card-actions">' +
+            (photoLink ? '<a href="' + photoLink + '" target="_blank" class="card-btn photo-btn">📸 View Photos</a>' : '') +
+            '<a href="' + addPhotoUrl + '" class="card-btn add-photo-btn">📷 Add Photo</a>' +
+          '</div>';
 
         entriesEl.appendChild(card);
       });
