@@ -162,7 +162,8 @@
 
         // Build "Add Photo" link that opens the main app with fields pre-filled
         const addPhotoParams = new URLSearchParams();
-        const rev = new URLSearchParams(window.location.search).get('reviewer') || '';
+        // Get reviewer from URL params, or from the entry's reviewer field
+        const rev = new URLSearchParams(window.location.search).get('reviewer') || eRev || '';
         if (rev) addPhotoParams.set('reviewer', rev);
         if (addr) addPhotoParams.set('photoAddr', addr);
         if (bldg) addPhotoParams.set('photoBldg', bldg);
