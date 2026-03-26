@@ -149,9 +149,9 @@
         const pLabel = pri ? 'P' + pri.charAt(0) : '';
         const pColorClass = pri ? ' p' + pri.charAt(0) : '';
 
-        // Extract photo URL — handle plain URLs, HYPERLINK formulas, or display text
-        let photoLink = '';
-        if (photos) {
+        // Get photo URL — use _photoUrl extracted from formula by the API, or check the display value
+        let photoLink = e._photoUrl || '';
+        if (!photoLink && photos) {
           if (photos.startsWith('http')) {
             photoLink = photos;
           } else if (photos.includes('HYPERLINK')) {
@@ -159,6 +159,8 @@
             if (match) photoLink = match[1];
           }
         }
+        // If there's display text like "📷 2114 Landscaping" but no URL, photos exist but link is missing
+        const hasPhotos = photoLink || (photos && photos.includes('📷'));
 
         // Build "Add Photo" link that opens the main app with fields pre-filled
         const addPhotoParams = new URLSearchParams();
