@@ -210,22 +210,46 @@
       manualBldg.oninput=checkUploadReady;
       manualCategory.onchange=checkUploadReady;
       manualDesc.oninput=checkUploadReady;
-      // Compress image to max 1200px wide and JPEG quality 0.8 to stay under Netlify's payload limit
-      function compressImage(file, maxWidth=1200, quality=0.8){
+      // Compress image to stay under Netlify's ~4.5MB payload limit
+      // Falls back to direct base64 if compression fails (e.g., HEIC on some browsers)
+      function compressImage(file, maxWidth=1200, quality=0.75){
         return new Promise((resolve,reject)=>{
+          // If file is already small enough (<2MB), skip compression
+          if(file.size < 2*1024*1024){
+            const reader=new FileReader();
+            reader.onload=()=>resolve({b64:reader.result.split(',')[1], mime:file.type||'image/jpeg'});
+            reader.onerror=()=>reject(new Error('Failed to read file'));
+            reader.readAsDataURL(file);
+            return;
+          }
+          // Try canvas compression
           const img=new Image();
+          const objectUrl=URL.createObjectURL(file);
           img.onload=()=>{
-            let w=img.width,h=img.height;
-            if(w>maxWidth){h=Math.round(h*(maxWidth/w));w=maxWidth;}
-            const canvas=document.createElement('canvas');
-            canvas.width=w;canvas.height=h;
-            const ctx=canvas.getContext('2d');
-            ctx.drawImage(img,0,0,w,h);
-            const dataUrl=canvas.toDataURL('image/jpeg',quality);
-            resolve(dataUrl.split(',')[1]);
+            try{
+              let w=img.width,h=img.height;
+              if(w>maxWidth){h=Math.round(h*(maxWidth/w));w=maxWidth;}
+              const canvas=document.createElement('canvas');
+              canvas.width=w;canvas.height=h;
+              const ctx=canvas.getContext('2d');
+              ctx.drawImage(img,0,0,w,h);
+              const dataUrl=canvas.toDataURL('image/jpeg',quality);
+              URL.revokeObjectURL(objectUrl);
+              resolve({b64:dataUrl.split(',')[1], mime:'image/jpeg'});
+            }catch(e){
+              URL.revokeObjectURL(objectUrl);
+              reject(new Error('Canvas compression failed: '+e.message));
+            }
           };
-          img.onerror=()=>reject(new Error('Failed to load image'));
-          img.src=URL.createObjectURL(file);
+          img.onerror=()=>{
+            URL.revokeObjectURL(objectUrl);
+            // Fallback: try reading as base64 directly (may be too large but worth trying)
+            const reader=new FileReader();
+            reader.onload=()=>resolve({b64:reader.result.split(',')[1], mime:file.type||'image/jpeg'});
+            reader.onerror=()=>reject(new Error('Cannot read this image format. Try taking a photo with the camera instead.'));
+            reader.readAsDataURL(file);
+          };
+          img.src=objectUrl;
         });
       }
 
@@ -244,9 +268,9 @@
           const name=generatePhotoName(entry),fullName=name+".jpg";
           try{
             photoStatus.textContent="Compressing "+fullName+"…";
-            const b64=await compressImage(file);
+            const compressed=await compressImage(file);
             photoStatus.textContent="Uploading "+fullName+"…";
-            const resp=await fetch(PHOTO_API,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({photoName:fullName,address:entry.address,bldgNumber:entry.bldgNumber,category:entry.category,description:entry.description,reviewer:entry.reviewer,timestamp:new Date().toISOString(),fileBase64:b64,fileMimeType:"image/jpeg"})});
+            const resp=await fetch(PHOTO_API,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({photoName:fullName,address:entry.address,bldgNumber:entry.bldgNumber,category:entry.category,description:entry.description,reviewer:entry.reviewer,timestamp:new Date().toISOString(),fileBase64:compressed.b64,fileMimeType:compressed.mime})});
             if(resp.ok){ok++;const result=await resp.json();const div=document.createElement("div");div.innerHTML='✅ <span class="saved-name">'+fullName+'</span>'+(result.sheet&&result.sheet.matched?' (linked to row '+result.sheet.row+')':' (not linked to sheet)');photoSavedList.appendChild(div);}
             else{fail++;const err=await resp.text();log("Upload fail "+fullName+": "+err);const div=document.createElement("div");div.innerHTML='❌ <span style="color:var(--red)">'+fullName+' failed</span>';photoSavedList.appendChild(div);}
           }catch(err){fail++;log("Upload error: "+(err?.message||err));const div=document.createElement("div");div.innerHTML='❌ <span style="color:var(--red)">Error: '+(err?.message||'unknown')+'</span>';photoSavedList.appendChild(div);}
