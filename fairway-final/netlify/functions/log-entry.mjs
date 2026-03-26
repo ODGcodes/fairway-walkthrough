@@ -32,40 +32,18 @@ async function getAccessToken() {
 }
 
 async function appendRow(accessToken, values) {
-  // Find the next truly empty row by checking columns A through H
-  // A row is "occupied" if ANY of columns A-H has data
-  const findUrl = `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/${encodeURIComponent("'" + SHEET_TAB + "'!A:H")}?majorDimension=ROWS`;
-  const findResp = await fetch(findUrl, {
-    headers: { 'Authorization': `Bearer ${accessToken}` },
-  });
-  const findData = await findResp.json();
-  
-  // Find the first row after row 2 (headers) where all columns A-H are empty
-  let nextRow = 3; // minimum starting row
-  if (findData.values) {
-    // findData.values[0] = row 1, [1] = row 2 (headers), [2] = row 3 (first data), etc.
-    for (let i = 0; i < findData.values.length; i++) {
-      const row = findData.values[i];
-      const hasData = row && row.some(cell => cell !== null && cell !== undefined && String(cell).trim() !== '');
-      if (hasData) {
-        nextRow = i + 2; // i is 0-indexed, rows are 1-indexed, so next empty = i+2
-      }
-    }
-    nextRow = Math.max(nextRow, 3);
-  }
-
-  // Write directly to the exact row using update (not append)
-  const writeRange = `'${SHEET_TAB}'!A${nextRow}:P${nextRow}`;
-  const url = `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/${encodeURIComponent(writeRange)}?valueInputOption=USER_ENTERED`;
+  // Use Google Sheets API append method — atomic, handles concurrent writes safely.
+  // The range 'A3:P3' tells the API where the table starts; it automatically finds the next empty row.
+  // OVERWRITE prevents inserting new rows (which would mess up formatting).
+  const appendRange = `'${SHEET_TAB}'!A3:P3`;
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/${encodeURIComponent(appendRange)}:append?valueInputOption=USER_ENTERED&insertDataOption=OVERWRITE`;
   const resp = await fetch(url, {
-    method: 'PUT',
+    method: 'POST',
     headers: {
       'Authorization': `Bearer ${accessToken}`,
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      range: writeRange,
-      majorDimension: 'ROWS',
       values: [values],
     }),
   });
