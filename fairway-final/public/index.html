@@ -107,7 +107,7 @@
         <div class="field-row"><span class="field-icon">📍</span><span class="field-label">Address</span><span class="field-hint">2253 or range</span></div>
         <div class="field-row"><span class="field-icon">🏢</span><span class="field-label">Building</span><span class="field-hint">Bldg 3, Cape, etc.</span></div>
         <div class="field-row"><span class="field-icon">📌</span><span class="field-label">Location</span><span class="field-hint">front, rear, interior</span></div>
-        <div class="field-row"><span class="field-icon">📋</span><span class="field-label">Category</span><span class="field-hint cats">Landscaping · Tree Work · Roof Repair · Wood Rot · Power Wash · Pavement · Owner · Major GC · Minor GC</span></div>
+        <div class="field-row"><span class="field-icon">📋</span><span class="field-label">Category</span><span class="field-hint cats">Owner Resp. · Landscaping · Tree Work · Pavement/Sidewalks · Drainage · Wood Rot · Roof Repair · Power Wash · Miscellaneous</span></div>
         <div class="field-row"><span class="field-icon">⚡</span><span class="field-label">Priority</span><span class="field-hint">1=urgent · 2=this yr · 3=next yr · 4=later</span></div>
         <div class="field-row"><span class="field-icon">💰</span><span class="field-label">Budget</span><span class="field-hint">Operating or Reserve</span></div>
         <div class="field-row"><span class="field-icon">📝</span><span class="field-label">Description</span><span class="field-hint">What needs to be done</span></div>
@@ -167,7 +167,7 @@
       const ASSISTANT_ID="24383100-a8e8-421c-8259-b380fcd0b4c4";
       const PUBLIC_KEY="31654b18-d9a7-4ded-b324-8f6d22c7fd1d";
       const PHOTO_API="/api/photos";
-      const CATEGORIES=["Landscaping","Tree Work","Roof Repair","Wood Rot","Power Wash","Pavement/SW","Owner Resp.","Major GC","Minor GC"];
+      const CATEGORIES=["Owner Resp.","Landscaping","Tree Work","Pavement/Sidewalks","Drainage","Wood Rot","Roof Repair","Power Wash","Miscellaneous"];
       const ALLOWED_REVIEWERS=new Set(["Cindy","Pat","Rick","Dave","Nick","Kathy","Will"]);
       const sessionLog=[];const photoCounter={};
       function addSessionEntry(e){sessionLog.push({address:e.address||"",bldgNumber:e.bldgNumber||"",category:e.category||"",description:e.description||"",reviewer:e.reviewer||getReviewerFromUrl(),timestamp:e.timestamp||new Date().toISOString()});renderEntryList();}
