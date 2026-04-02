@@ -2,7 +2,7 @@ import { SignJWT, importPKCS8 } from 'jose';
 
 const SHEET_ID = '1VLp9gzDW1GhAHRGKic7aX3rRgUsmSQ2QUr2rZ5Wvu2Y';
 const SHEET_TAB = 'Master Tab';
-const RANGE = `'${SHEET_TAB}'!A3:P`;
+const RANGE = `'${SHEET_TAB}'!A3:Q`;
 
 async function getAccessToken() {
   const email = Netlify.env.get('GOOGLE_SERVICE_ACCOUNT_EMAIL');
@@ -33,9 +33,9 @@ async function getAccessToken() {
 
 async function appendRow(accessToken, values) {
   // Use Google Sheets API append method — atomic, handles concurrent writes safely.
-  // The range 'A3:P3' tells the API where the table starts; it automatically finds the next empty row.
+  // The range 'A3:Q3' tells the API where the table starts; it automatically finds the next empty row.
   // OVERWRITE prevents inserting new rows (which would mess up formatting).
-  const appendRange = `'${SHEET_TAB}'!A3:P3`;
+  const appendRange = `'${SHEET_TAB}'!A3:Q3`;
   const url = `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/${encodeURIComponent(appendRange)}:append?valueInputOption=USER_ENTERED&insertDataOption=OVERWRITE`;
   const resp = await fetch(url, {
     method: 'POST',
@@ -106,9 +106,14 @@ export default async (req, context) => {
       return new Response(JSON.stringify(errResp), { status: 200, headers: { 'Content-Type': 'application/json' } });
     }
 
-    // Row maps to columns A through P
-    // A=Bldg, B=Address, C=Location, D=Reviewer, E=Priority, F=Category, G=Op/Res, H=Description, I-P=blank
+    // Generate date stamp in MM/DD/YYYY format
+    const now = new Date();
+    const dateEntered = String(now.getMonth() + 1).padStart(2, '0') + '/' + String(now.getDate()).padStart(2, '0') + '/' + now.getFullYear();
+
+    // Row maps to columns A through Q
+    // A=Date Entered, B=Bldg, C=Address, D=Location, E=Reviewer, F=Rank, G=Category, H=Op/Res, I=Description, J-Q=blank
     const row = [
+      dateEntered,
       bldgNumber,
       address,
       specificLocation,
@@ -117,14 +122,14 @@ export default async (req, context) => {
       category,
       operatingOrReserve,
       description,
-      '', // I - Photos (filled later)
-      '', // J - Quote 1
-      '', // K - Quote 2
-      '', // L - Quote 3
-      '', // M - Contractor
-      '', // N - Flw-up
-      '', // O - Compl?
-      '', // P - Auth Pymt
+      '', // J - Photos (filled later)
+      '', // K - Quote 1
+      '', // L - Quote 2
+      '', // M - Quote 3
+      '', // N - Contractor
+      '', // O - Flw-up
+      '', // P - Compl?
+      '', // Q - Auth Pymt
     ];
 
     const token = await getAccessToken();
