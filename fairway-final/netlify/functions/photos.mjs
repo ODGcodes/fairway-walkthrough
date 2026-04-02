@@ -30,23 +30,23 @@ async function getAccessToken() {
 async function addPhotoUrlToSheet(photoUrl, address, bldgNumber, category) {
   try {
     const token = await getAccessToken();
-    // Read columns A-I to find matching row
-    const range = encodeURIComponent(`'${SHEET_TAB}'!A:I`);
+    // Read columns A-J to find matching row (Date Entered is now col A, so everything shifted right by 1)
+    const range = encodeURIComponent(`'${SHEET_TAB}'!A:J`);
     const readUrl = `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/${range}?majorDimension=ROWS`;
     const readResp = await fetch(readUrl, { headers: { 'Authorization': `Bearer ${token}` } });
     const readData = await readResp.json();
     if (!readData.values) return { matched: false, reason: 'No data in sheet' };
 
     // Find matching row by address + category (primary) or building + category (secondary)
-    // Same address can have multiple rows with different categories
+    // Column layout: A=Date, B=Bldg, C=Address, D=Location, E=Reviewer, F=Rank, G=Category, H=Op/Res, I=Description, J=Photos
     let bestRow = -1;
-    let addrOnlyMatch = -1; // fallback if category doesn't match
+    let addrOnlyMatch = -1;
     for (let i = 2; i < readData.values.length; i++) {
       const row = readData.values[i];
-      const rowBldg = (row[0] || '').toString().trim();   // A = Bldg
-      const rowAddr = (row[1] || '').toString().trim();    // B = Address
-      const rowCat = (row[5] || '').toString().trim();     // F = Category
-      const rowPhoto = (row[8] || '').toString().trim();   // I = Photos
+      const rowBldg = (row[1] || '').toString().trim();   // B = Bldg
+      const rowAddr = (row[2] || '').toString().trim();    // C = Address
+      const rowCat = (row[6] || '').toString().trim();     // G = Category
+      const rowPhoto = (row[9] || '').toString().trim();   // J = Photos
 
       // Check address or building match
       const addrMatch = address && rowAddr && rowAddr === address.toString().trim();
@@ -82,7 +82,7 @@ async function addPhotoUrlToSheet(photoUrl, address, bldgNumber, category) {
     const cellValue = '=HYPERLINK("' + galleryUrl.replace(/"/g, '""') + '","' + displayLabel.replace(/"/g, '""') + '")';
 
     const rowNum = bestRow + 1;
-    const writeRange = `'${SHEET_TAB}'!I${rowNum}`;
+    const writeRange = `'${SHEET_TAB}'!J${rowNum}`;
     const writeUrl = `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/${encodeURIComponent(writeRange)}?valueInputOption=USER_ENTERED`;
     const writeResp = await fetch(writeUrl, {
       method: 'PUT',
