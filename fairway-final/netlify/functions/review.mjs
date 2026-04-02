@@ -33,7 +33,7 @@ export default async (req, context) => {
 
   try {
     const token = await getAccessToken();
-    const range = encodeURIComponent(`'${SHEET_TAB}'!A2:P`);
+    const range = encodeURIComponent(`'${SHEET_TAB}'!A2:Q`);
     
     // Fetch display values
     const url = `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/${range}?majorDimension=ROWS&valueRenderOption=FORMATTED_VALUE`;
@@ -41,7 +41,7 @@ export default async (req, context) => {
     const data = await resp.json();
     if (data.error) throw new Error(JSON.stringify(data.error));
 
-    // Also fetch formulas to extract HYPERLINK URLs from column I
+    // Also fetch formulas to extract HYPERLINK URLs from column J (Photos)
     const formulaUrl = `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/${range}?majorDimension=ROWS&valueRenderOption=FORMULA`;
     const formulaResp = await fetch(formulaUrl, { headers: { 'Authorization': `Bearer ${token}` } });
     const formulaData = await formulaResp.json();
