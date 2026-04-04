@@ -176,7 +176,14 @@
       CATEGORIES.forEach(c=>{const o=document.createElement("option");o.value=c;o.textContent=c;manualCategory.appendChild(o);});
       function setStatus(s,t,sub){statusBanner.className="status-banner "+(s||"");statusText.textContent=t;statusSub.textContent=sub||"";}
       function log(m){console.log("[FW]",m);debugLog.classList.add("visible");debugLog.textContent+=m+"\n";debugLog.scrollTop=debugLog.scrollHeight;}
-      function getReviewerFromUrl(){return(new URLSearchParams(window.location.search).get("reviewer")||"").trim();}
+      function getReviewerFromUrl(){
+        const urlReviewer=(new URLSearchParams(window.location.search).get("reviewer")||"").trim();
+        // Store reviewer in localStorage so it persists even if the URL param gets lost (iPhone home screen issue)
+        if(urlReviewer){try{localStorage.setItem("fw_reviewer",urlReviewer);}catch(e){}}
+        // Fall back to stored reviewer if URL param is missing
+        if(!urlReviewer){try{return localStorage.getItem("fw_reviewer")||"";}catch(e){return "";}}
+        return urlReviewer;
+      }
       function startTimer(){startTime=Date.now();timerInterval=setInterval(()=>{const e=Math.floor((Date.now()-startTime)/1000);timerEl.textContent=String(Math.floor(e/60)).padStart(2,"0")+":"+String(e%60).padStart(2,"0");},1000);}
       function stopTimer(){clearInterval(timerInterval);timerInterval=null;}
       function populateFormFromEntry(idx){
@@ -298,12 +305,35 @@
         // Pass reviewer to review page link
         const reviewLink=document.getElementById('review-link');
         if(reviewer)reviewLink.href='/review.html?reviewer='+encodeURIComponent(reviewer);
-        if(!reviewer){setStatus("error","Missing reviewer","Open with ?reviewer=Name (e.g., ?reviewer=Cindy)");startBtn.disabled=true;}
+        if(!reviewer){setStatus("error","Missing reviewer","Close this and open your personal link (e.g., /rick or /kathy)");startBtn.disabled=true;}
         else if(!ALLOWED_REVIEWERS.has(reviewer)){setStatus("error","Unknown reviewer","Use one of: "+Array.from(ALLOWED_REVIEWERS).join(", "));startBtn.disabled=true;}
         else{setStatus("","Ready","Reviewer: "+reviewer+". Tap below to start.");startBtn.disabled=false;}
       }catch(err){log("Init failed: "+err.message);setStatus("error","SDK failed to load","See details below");}
-      startBtn.onclick=async()=>{if(!vapi){log("Vapi not init");return;}const r=getReviewerFromUrl();if(!r||!ALLOWED_REVIEWERS.has(r)){setStatus("error","Missing/invalid reviewer","Use ?reviewer=Cindy");return;}setStatus("","Connecting…","Reviewer: "+r);startBtn.disabled=true;timerEl.textContent="";debugLog.classList.remove("visible");debugLog.textContent="";try{await vapi.start(ASSISTANT_ID,{variableValues:{reviewerName:r}});}catch(err){log("Start failed: "+(err?.message||JSON.stringify(err)));setStatus("error","Could not connect","See details below");startBtn.disabled=false;}};
-      stopBtn.onclick=async()=>{if(!vapi)return;setStatus("","Ending…","Please wait");stopBtn.disabled=true;try{await vapi.stop();}catch(err){log("Stop: "+(err?.message||err));}};
+      startBtn.onclick=async()=>{
+        if(!vapi){log("Vapi not init");return;}
+        const r=getReviewerFromUrl();
+        if(!r||!ALLOWED_REVIEWERS.has(r)){setStatus("error","Missing/invalid reviewer","Use ?reviewer=Cindy");return;}
+        setStatus("","Connecting…","Reviewer: "+r);
+        startBtn.disabled=true;timerEl.textContent="";debugLog.classList.remove("visible");debugLog.textContent="";
+        // Check mic permission first
+        try{
+          await navigator.mediaDevices.getUserMedia({audio:true});
+        }catch(micErr){
+          setStatus("error","Microphone blocked","Tap the lock icon in your address bar and allow microphone access, then try again.");
+          startBtn.disabled=false;
+          return;
+        }
+        try{await vapi.start(ASSISTANT_ID,{variableValues:{reviewerName:r}});}
+        catch(err){
+          const msg=err?.message||JSON.stringify(err);
+          if(msg.includes("microphone")||msg.includes("NotAllowed")||msg.includes("Permission")){
+            setStatus("error","Microphone blocked","Allow microphone access and try again.");
+          }else{
+            log("Start failed: "+msg);setStatus("error","Could not connect","Check your internet connection and try again.");
+          }
+          startBtn.disabled=false;
+        }
+      };      stopBtn.onclick=async()=>{if(!vapi)return;setStatus("","Ending…","Please wait");stopBtn.disabled=true;try{await vapi.stop();}catch(err){log("Stop: "+(err?.message||err));}};
 
       // Check for pre-filled photo params (from Review Entries page)
       const urlParams=new URLSearchParams(window.location.search);
