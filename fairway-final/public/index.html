@@ -109,7 +109,7 @@
         <div class="field-row"><span class="field-icon">📌</span><span class="field-label">LOCATION</span><span class="field-hint">front, rear, interior, side (N/S/E/W), corner (NE/NW/SE/SW)</span></div>
         <div class="field-row"><span class="field-icon">⚡</span><span class="field-label">RANK 1-4</span><span class="field-hint">1=urgent · 2=this yr · 3=next yr · 4=later</span></div>
         <div class="field-row"><span class="field-icon">📋</span><span class="field-label">CATEGORY</span><span class="field-hint cats">Owner Resp. · Landscaping · Tree Work · Pavement/Sidewalks · Drainage · Wood Rot · Roof Repair · Power Wash · Miscellaneous</span></div>
-        <div class="field-row"><span class="field-icon">💰</span><span class="field-label">OPER / RESERVE</span><span class="field-hint">Operating or Reserve</span></div>
+        <div class="field-row"><span class="field-icon">💰</span><span class="field-label">OPER / RES / OWNER</span><span class="field-hint">Operating, Reserve, or Owner</span></div>
         <div class="field-row"><span class="field-icon">📝</span><span class="field-label">DESCRIPTION</span><span class="field-hint">What needs to be done (15 words max)</span></div>
       </div>
 
@@ -170,6 +170,26 @@
       const CATEGORIES=["Owner Resp.","Landscaping","Tree Work","Pavement/Sidewalks","Drainage","Wood Rot","Roof Repair","Power Wash","Miscellaneous"];
       const ALLOWED_REVIEWERS=new Set(["Cindy","Pat","Rick","Dave","Nick","Kathy","Will"]);
       const sessionLog=[];const photoCounter={};
+      // Load existing entries from Google Sheet on page load
+      async function loadExistingEntries(){
+        try{
+          const r=await fetch('/api/review');
+          const d=await r.json();
+          if(d.entries&&d.entries.length>0){
+            d.entries.forEach(e=>{
+              sessionLog.push({
+                address:e['ADDRESS']||e['Address']||'',
+                bldgNumber:e['BLDG #']||e['Bldg']||'',
+                category:e['CATEGORY']||e['Category']||'',
+                description:e['DESCRIPTION']||e['Description']||'',
+                reviewer:e['REVIEWER(S)']||e['Reviewer']||'',
+                timestamp:e['DATE ENTERED']||''
+              });
+            });
+            renderEntryList();
+          }
+        }catch(e){console.log('[FW] Could not load existing entries:',e);}
+      }
       function addSessionEntry(e){sessionLog.push({address:e.address||"",bldgNumber:e.bldgNumber||"",category:e.category||"",description:e.description||"",reviewer:e.reviewer||getReviewerFromUrl(),timestamp:e.timestamp||new Date().toISOString()});renderEntryList();}
       const statusBanner=document.getElementById("status-banner"),statusText=document.getElementById("status-text"),statusSub=document.getElementById("status-sub"),timerEl=document.getElementById("timer"),startBtn=document.getElementById("start"),stopBtn=document.getElementById("stop"),debugLog=document.getElementById("debug-log"),photoPanel=document.getElementById("photo-panel"),photoEntryList=document.getElementById("photo-entry-list"),photoFileCamera=document.getElementById("photo-file-camera"),photoFileGallery=document.getElementById("photo-file-gallery"),photoPreviewRow=document.getElementById("photo-preview-row"),btnUpload=document.getElementById("btn-upload"),photoStatus=document.getElementById("photo-status"),photoSavedList=document.getElementById("photo-saved-list"),btnShowPhotos=document.getElementById("btn-show-photos"),btnAddEntry=document.getElementById("btn-add-entry"),manualAddress=document.getElementById("manual-address"),manualBldg=document.getElementById("manual-bldg"),manualCategory=document.getElementById("manual-category"),manualDesc=document.getElementById("manual-desc"),photoClose=document.getElementById("photo-close");
       let vapi=null,timerInterval=null,startTime=null,selectedEntryIdx=-1,selectedFiles=[];
@@ -201,6 +221,7 @@
         if(sessionLog.length>0&&(selectedEntryIdx<0||selectedEntryIdx>=sessionLog.length)){selectedEntryIdx=sessionLog.length-1;renderEntryList();populateFormFromEntry(selectedEntryIdx);}
       }
       function generatePhotoName(e){const cat=(e.category||"General").replace(/[\s\/\.]+/g,""),addr=e.bldgNumber?"Bldg"+String(e.bldgNumber).replace(/\s+/g,""):(e.address||"NoAddr"),rev=e.reviewer||"Unknown",key=cat+"-"+addr;photoCounter[key]=(photoCounter[key]||0)+1;return cat+"-"+addr+"-"+rev+"-"+String(photoCounter[key]).padStart(2,"0");}
+      loadExistingEntries();
       function showPhotoPanel(){photoPanel.classList.add("visible");photoFileCamera.value="";photoFileGallery.value="";photoPreviewRow.innerHTML="";selectedFiles=[];btnUpload.disabled=true;photoStatus.textContent="";photoStatus.className="photo-status";if(sessionLog.length>0){const l=sessionLog[sessionLog.length-1];manualAddress.value=l.address||"";manualBldg.value=l.bldgNumber||"";manualCategory.value=l.category||"";}renderEntryList();photoPanel.scrollIntoView({behavior:"smooth",block:"start"});}
       function hidePhotoPanel(){photoPanel.classList.remove("visible");}
       function checkUploadReady(){
