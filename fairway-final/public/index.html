@@ -170,13 +170,14 @@
       const CATEGORIES=["Owner Resp.","Landscaping","Tree Work","Pavement/Sidewalks","Drainage","Wood Rot","Roof Repair","Power Wash","Miscellaneous"];
       const ALLOWED_REVIEWERS=new Set(["Cindy","Pat","Rick","Dave","Nick","Kathy","Will"]);
       const sessionLog=[];const photoCounter={};
-      // Load existing entries from Google Sheet on page load
+      // Load existing entries from Google Sheet on page load (last 5 only)
       async function loadExistingEntries(){
         try{
           const r=await fetch('/api/review');
           const d=await r.json();
           if(d.entries&&d.entries.length>0){
-            d.entries.forEach(e=>{
+            const recent=d.entries.slice(-5);
+            recent.forEach(e=>{
               sessionLog.push({
                 address:e['ADDRESS']||e['Address']||'',
                 bldgNumber:e['BLDG #']||e['Bldg']||'',
