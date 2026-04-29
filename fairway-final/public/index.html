@@ -184,7 +184,8 @@
                 category:e['CATEGORY']||e['Category']||'',
                 description:e['DESCRIPTION']||e['Description']||'',
                 reviewer:e['REVIEWER(S)']||e['Reviewer']||'',
-                timestamp:e['DATE ENTERED']||''
+                timestamp:e['DATE ENTERED']||'',
+                fromSheet:true
               });
             });
             renderEntryList();
@@ -218,12 +219,21 @@
       }
       function renderEntryList(){
         photoEntryList.innerHTML="";
-        sessionLog.forEach((e,i)=>{const li=document.createElement("li");const label=[e.bldgNumber?"Bldg "+e.bldgNumber:"",e.address].filter(Boolean).join(" · ")||"No address";li.innerHTML='<div class="entry-addr">'+label+(e.category?" — "+e.category:"")+'</div><div class="entry-desc">'+(e.description||"")+'</div>';if(i===selectedEntryIdx)li.classList.add("selected");li.onclick=()=>{selectedEntryIdx=i;renderEntryList();populateFormFromEntry(i);checkUploadReady();};photoEntryList.appendChild(li);});
-        if(sessionLog.length>0&&(selectedEntryIdx<0||selectedEntryIdx>=sessionLog.length)){selectedEntryIdx=sessionLog.length-1;renderEntryList();populateFormFromEntry(selectedEntryIdx);}
+        sessionLog.forEach((e,i)=>{const li=document.createElement("li");const label=[e.bldgNumber?"Bldg "+e.bldgNumber:"",e.address].filter(Boolean).join(" · ")||"No address";li.innerHTML='<div class="entry-addr">'+label+(e.category?" — "+e.category:"")+'</div><div class="entry-desc">'+(e.description||"")+(e.fromSheet?' (sheet)':'')+'</div>';if(i===selectedEntryIdx)li.classList.add("selected");li.onclick=()=>{selectedEntryIdx=i;renderEntryList();populateFormFromEntry(i);checkUploadReady();};photoEntryList.appendChild(li);});
       }
       function generatePhotoName(e){const cat=(e.category||"General").replace(/[\s\/\.]+/g,""),addr=e.bldgNumber?"Bldg"+String(e.bldgNumber).replace(/\s+/g,""):(e.address||"NoAddr"),rev=e.reviewer||"Unknown",key=cat+"-"+addr;photoCounter[key]=(photoCounter[key]||0)+1;return cat+"-"+addr+"-"+rev+"-"+String(photoCounter[key]).padStart(2,"0");}
       loadExistingEntries();
-      function showPhotoPanel(){photoPanel.classList.add("visible");photoFileCamera.value="";photoFileGallery.value="";photoPreviewRow.innerHTML="";selectedFiles=[];btnUpload.disabled=true;photoStatus.textContent="";photoStatus.className="photo-status";if(sessionLog.length>0){const l=sessionLog[sessionLog.length-1];manualAddress.value=l.address||"";manualBldg.value=l.bldgNumber||"";manualCategory.value=l.category||"";}renderEntryList();photoPanel.scrollIntoView({behavior:"smooth",block:"start"});}
+      function showPhotoPanel(){photoPanel.classList.add("visible");photoFileCamera.value="";photoFileGallery.value="";photoPreviewRow.innerHTML="";selectedFiles=[];btnUpload.disabled=true;photoStatus.textContent="";photoStatus.className="photo-status";
+        // Find last voice entry (not from sheet)
+        let lastVoiceIdx=-1;
+        for(let i=sessionLog.length-1;i>=0;i--){if(!sessionLog[i].fromSheet){lastVoiceIdx=i;break;}}
+        const useIdx=lastVoiceIdx>=0?lastVoiceIdx:(sessionLog.length>0?sessionLog.length-1:-1);
+        if(useIdx>=0){
+          selectedEntryIdx=useIdx;
+          const l=sessionLog[useIdx];
+          manualAddress.value=l.address||"";manualBldg.value=l.bldgNumber||"";manualCategory.value=l.category||"";
+        }
+        renderEntryList();photoPanel.scrollIntoView({behavior:"smooth",block:"start"});}
       function hidePhotoPanel(){photoPanel.classList.remove("visible");}
       function checkUploadReady(){
         // Enable upload if we have files AND either an entry is selected or the form has data
