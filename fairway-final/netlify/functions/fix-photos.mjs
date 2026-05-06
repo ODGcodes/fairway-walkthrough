@@ -29,31 +29,32 @@ async function getAccessToken() {
 }
 
 function findBestRow(sheetRows, photoAddr, photoBldg, photoCat) {
-  let addrCatMatch = -1;
-  let addrOnlyMatch = -1;
-  let bldgCatMatch = -1;
-  let bldgOnlyMatch = -1;
-
+  // Priority 1: address + category (exact)
   for (let i = 2; i < sheetRows.length; i++) {
-    const row = sheetRows[i];
-    const rowBldg = (row[1] || '').toString().trim();
-    const rowAddr = (row[2] || '').toString().trim();
-    const rowCat = (row[6] || '').toString().trim().toLowerCase();
-
-    const addrMatch = photoAddr && rowAddr && rowAddr === photoAddr;
-    const bldgMatch = photoBldg && rowBldg && rowBldg === photoBldg;
-    const catMatch = photoCat && rowCat && rowCat === photoCat;
-
-    if (addrMatch && catMatch) { addrCatMatch = i; break; }
-    if (addrMatch && addrOnlyMatch < 0) addrOnlyMatch = i;
-    if (!photoAddr && bldgMatch && catMatch && bldgCatMatch < 0) bldgCatMatch = i;
-    if (!photoAddr && bldgMatch && bldgOnlyMatch < 0) bldgOnlyMatch = i;
+    const rowAddr = (sheetRows[i][2] || '').toString().trim();
+    const rowCat = (sheetRows[i][6] || '').toString().trim().toLowerCase();
+    if (photoAddr && rowAddr === photoAddr && photoCat && rowCat === photoCat) return i;
   }
-
-  if (addrCatMatch >= 0) return addrCatMatch;
-  if (addrOnlyMatch >= 0) return addrOnlyMatch;
-  if (bldgCatMatch >= 0) return bldgCatMatch;
-  if (bldgOnlyMatch >= 0) return bldgOnlyMatch;
+  // Priority 2: address only
+  for (let i = 2; i < sheetRows.length; i++) {
+    const rowAddr = (sheetRows[i][2] || '').toString().trim();
+    if (photoAddr && rowAddr === photoAddr) return i;
+  }
+  // Priority 3: building + category (only when no address)
+  if (!photoAddr) {
+    for (let i = 2; i < sheetRows.length; i++) {
+      const rowBldg = (sheetRows[i][1] || '').toString().trim();
+      const rowCat = (sheetRows[i][6] || '').toString().trim().toLowerCase();
+      if (photoBldg && rowBldg === photoBldg && photoCat && rowCat === photoCat) return i;
+    }
+  }
+  // Priority 4: building only (only when no address)
+  if (!photoAddr) {
+    for (let i = 2; i < sheetRows.length; i++) {
+      const rowBldg = (sheetRows[i][1] || '').toString().trim();
+      if (photoBldg && rowBldg === photoBldg) return i;
+    }
+  }
   return -1;
 }
 
@@ -61,7 +62,7 @@ export default async (req, context) => {
   try {
     const token = await getAccessToken();
 
-    // Step 1: Read all photo metadata from blob store
+    // Step 1: Read all photo metadata
     const metaStore = getStore("photo-meta");
     const { blobs } = await metaStore.list();
     const photos = [];
@@ -82,21 +83,17 @@ export default async (req, context) => {
     const sheetRows = readData.values;
     const totalRows = sheetRows.length;
 
-    // Step 3: Clear ALL of column J (rows 3 onwards, since row 1=title, row 2=headers)
+    // Step 3: Clear column J (rows 3 onwards)
     const clearRange = `'${SHEET_TAB}'!J3:J${totalRows}`;
-    const clearUrl = `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/${encodeURIComponent(clearRange)}:clear`;
-    await fetch(clearUrl, {
+    await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/${encodeURIComponent(clearRange)}:clear`, {
       method: 'POST',
       headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({}),
     });
 
-    // Step 4: For each sheet row, find all matching photos and build a gallery link
-    // Group photos by their best matching row
-    const rowPhotos = {}; // rowIndex -> { addresses: Set, categories: Set, count: number }
-
-    let matched = 0;
-    let unmatched = 0;
+    // Step 4: Match each photo to a row and track which rows get photos
+    const rowPhotos = {}; // rowIndex -> { addr, cat }
+    let matched = 0, unmatched = 0;
     const unmatchedList = [];
 
     for (const photo of photos) {
@@ -104,57 +101,47 @@ export default async (req, context) => {
       const photoBldg = (photo.bldgNumber || '').toString().trim();
       const photoCat = (photo.category || '').toString().trim().toLowerCase();
 
-      const bestRow = findBestRow(sheetRows, photoAddr, photoBldg, photoCat);
-
-      if (bestRow >= 0) {
+      // If photo has rowNumber in metadata, use it directly
+      if (photo.rowNumber && parseInt(photo.rowNumber) > 0) {
+        const rowIdx = parseInt(photo.rowNumber) - 1;
+        if (!rowPhotos[rowIdx]) rowPhotos[rowIdx] = { addr: photoAddr, cat: photo.category || '' };
         matched++;
-        if (!rowPhotos[bestRow]) rowPhotos[bestRow] = { addresses: new Set(), categories: new Set(), count: 0 };
-        if (photoAddr) rowPhotos[bestRow].addresses.add(photoAddr);
-        if (photo.category) rowPhotos[bestRow].categories.add(photo.category);
-        rowPhotos[bestRow].count++;
+        continue;
+      }
+
+      const bestRow = findBestRow(sheetRows, photoAddr, photoBldg, photoCat);
+      if (bestRow >= 0) {
+        if (!rowPhotos[bestRow]) rowPhotos[bestRow] = { addr: photoAddr, cat: photo.category || '' };
+        matched++;
       } else {
         unmatched++;
         unmatchedList.push({ photoName: photo.photoName, address: photoAddr, bldg: photoBldg, category: photoCat });
       }
     }
 
-    // Step 5: Write HYPERLINK formulas for each matched row
+    // Step 5: Write HYPERLINK for each row that has at least one photo
     const writes = [];
     for (const [rowIdx, info] of Object.entries(rowPhotos)) {
       const rowNum = parseInt(rowIdx) + 1;
-      const addr = Array.from(info.addresses).join(', ');
-      const cat = Array.from(info.categories).join(', ');
-
-      // Build gallery link with filter params
+      const addr = (info.addr || '').trim();
+      const cat = (info.cat || '').trim();
       const params = new URLSearchParams();
-      if (info.addresses.size === 1) params.set('address', Array.from(info.addresses)[0]);
-      if (info.categories.size === 1) params.set('category', Array.from(info.categories)[0]);
+      if (addr) params.set('address', addr);
+      if (cat) params.set('category', cat);
       const galleryUrl = SITE_URL + '/photos.html?' + params.toString();
-
       const displayLabel = 'Photos' + (addr ? ' ' + addr : '') + (cat ? ' ' + cat : '');
       const cellValue = '=HYPERLINK("' + galleryUrl.replace(/"/g, '""') + '","' + displayLabel.replace(/"/g, '""') + '")';
-
-      writes.push({
-        range: `'${SHEET_TAB}'!J${rowNum}`,
-        values: [[cellValue]],
-      });
+      writes.push({ range: `'${SHEET_TAB}'!J${rowNum}`, values: [[cellValue]] });
     }
 
-    // Batch write all HYPERLINK formulas
     if (writes.length > 0) {
-      const batchUrl = `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values:batchUpdate`;
-      const batchResp = await fetch(batchUrl, {
+      const batchResp = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values:batchUpdate`, {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          valueInputOption: 'USER_ENTERED',
-          data: writes,
-        }),
+        body: JSON.stringify({ valueInputOption: 'USER_ENTERED', data: writes }),
       });
       const batchData = await batchResp.json();
-      if (batchData.error) {
-        return new Response(JSON.stringify({ error: batchData.error, matched, unmatched }), { status: 500, headers: { 'Content-Type': 'application/json' } });
-      }
+      if (batchData.error) return new Response(JSON.stringify({ error: batchData.error }), { status: 500, headers: { 'Content-Type': 'application/json' } });
     }
 
     return new Response(JSON.stringify({
@@ -162,10 +149,9 @@ export default async (req, context) => {
       totalPhotos: photos.length,
       matched,
       unmatched,
-      rowsWithPhotos: writes.length,
+      rowsLinked: writes.length,
       unmatchedPhotos: unmatchedList,
     }), { headers: { 'Content-Type': 'application/json' } });
-
   } catch (err) {
     return new Response(JSON.stringify({ error: err.message }), { status: 500, headers: { 'Content-Type': 'application/json' } });
   }
