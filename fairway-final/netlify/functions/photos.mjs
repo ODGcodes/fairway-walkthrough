@@ -4,6 +4,7 @@ import { SignJWT, importPKCS8 } from 'jose';
 
 const SHEET_ID = '1VLp9gzDW1GhAHRGKic7aX3rRgUsmSQ2QUr2rZ5Wvu2Y';
 const SHEET_TAB = 'Master Tab';
+const SITE_URL = 'https://fairway-walkthrough.netlify.app';
 
 async function getAccessToken() {
   const email = Netlify.env.get('GOOGLE_SERVICE_ACCOUNT_EMAIL');
@@ -28,81 +29,87 @@ async function getAccessToken() {
   return data.access_token;
 }
 
-async function addPhotoUrlToSheet(photoUrl, address, bldgNumber, category) {
+async function addPhotoUrlToSheet(photoUrl, address, bldgNumber, category, rowNumber) {
   try {
     const token = await getAccessToken();
+
+    // Build gallery link
+    const addr = (address || '').toString().trim();
+    const cat = (category || '').toString().trim();
+    const params = new URLSearchParams();
+    if (addr) params.set('address', addr);
+    if (cat) params.set('category', cat);
+    const galleryUrl = SITE_URL + '/photos.html?' + params.toString();
+    const displayLabel = 'Photos' + (addr ? ' ' + addr : '') + (cat ? ' ' + cat : '');
+    const cellValue = '=HYPERLINK("' + galleryUrl.replace(/"/g, '""') + '","' + displayLabel.replace(/"/g, '""') + '")';
+
+    // PRIMARY: If rowNumber is provided, write directly to that row. No matching needed.
+    if (rowNumber && parseInt(rowNumber) > 0) {
+      const rowNum = parseInt(rowNumber);
+      const writeRange = `'${SHEET_TAB}'!J${rowNum}`;
+      const writeUrl = `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/${encodeURIComponent(writeRange)}?valueInputOption=USER_ENTERED`;
+      const writeResp = await fetch(writeUrl, {
+        method: 'PUT',
+        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ range: writeRange, majorDimension: 'ROWS', values: [[cellValue]] }),
+      });
+      const writeData = await writeResp.json();
+      if (writeData.error) return { matched: false, reason: JSON.stringify(writeData.error) };
+      return { matched: true, row: rowNum, method: 'rowNumber' };
+    }
+
+    // FALLBACK: Match by address+category when rowNumber is not available
     const range = encodeURIComponent(`'${SHEET_TAB}'!A:J`);
     const readUrl = `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/${range}?majorDimension=ROWS`;
     const readResp = await fetch(readUrl, { headers: { 'Authorization': `Bearer ${token}` } });
     const readData = await readResp.json();
     if (!readData.values) return { matched: false, reason: 'No data in sheet' };
 
-    // Column layout: A=Date, B=Bldg, C=Address, D=Location, E=Reviewer, F=Rank, G=Category, H=Op/Res, I=Description, J=Photos
     const photoAddr = (address || '').toString().trim();
     const photoBldg = (bldgNumber || '').toString().trim();
     const photoCat = (category || '').toString().trim().toLowerCase();
 
-    // Match priority:
-    // 1. address + category (exact, best match)
-    // 2. address only (address matches but category doesn't)
-    // 3. building + category (ONLY when photo has NO address)
-    // 4. building only (ONLY when photo has NO address)
-    let addrCatMatch = -1;
-    let addrOnlyMatch = -1;
-    let bldgCatMatch = -1;
-    let bldgOnlyMatch = -1;
+    let bestRow = -1;
 
+    // Look for exact address+category match first
     for (let i = 2; i < readData.values.length; i++) {
       const row = readData.values[i];
-      const rowBldg = (row[1] || '').toString().trim();
       const rowAddr = (row[2] || '').toString().trim();
       const rowCat = (row[6] || '').toString().trim().toLowerCase();
 
-      const addrMatch = photoAddr && rowAddr && rowAddr === photoAddr;
-      const bldgMatch = photoBldg && rowBldg && rowBldg === photoBldg;
-      const catMatch = photoCat && rowCat && rowCat === photoCat;
-
-      // Priority 1: address + category (stop looking)
-      if (addrMatch && catMatch) {
-        addrCatMatch = i;
+      if (photoAddr && rowAddr === photoAddr && photoCat && rowCat === photoCat) {
+        bestRow = i;
         break;
-      }
-
-      // Priority 2: address only (first match)
-      if (addrMatch && addrOnlyMatch < 0) {
-        addrOnlyMatch = i;
-      }
-
-      // Priority 3: building + category (ONLY when photo has no address)
-      if (!photoAddr && bldgMatch && catMatch && bldgCatMatch < 0) {
-        bldgCatMatch = i;
-      }
-
-      // Priority 4: building only (ONLY when photo has no address)
-      if (!photoAddr && bldgMatch && bldgOnlyMatch < 0) {
-        bldgOnlyMatch = i;
       }
     }
 
-    // Pick best match in priority order
-    let bestRow = -1;
-    if (addrCatMatch >= 0) bestRow = addrCatMatch;
-    else if (addrOnlyMatch >= 0) bestRow = addrOnlyMatch;
-    else if (bldgCatMatch >= 0) bestRow = bldgCatMatch;
-    else if (bldgOnlyMatch >= 0) bestRow = bldgOnlyMatch;
+    // Then address only
+    if (bestRow < 0) {
+      for (let i = 2; i < readData.values.length; i++) {
+        const rowAddr = (readData.values[i][2] || '').toString().trim();
+        if (photoAddr && rowAddr === photoAddr) { bestRow = i; break; }
+      }
+    }
+
+    // Then building+category (only when no address on photo)
+    if (bestRow < 0 && !photoAddr) {
+      for (let i = 2; i < readData.values.length; i++) {
+        const row = readData.values[i];
+        const rowBldg = (row[1] || '').toString().trim();
+        const rowCat = (row[6] || '').toString().trim().toLowerCase();
+        if (photoBldg && rowBldg === photoBldg && photoCat && rowCat === photoCat) { bestRow = i; break; }
+      }
+    }
+
+    // Then building only (only when no address on photo)
+    if (bestRow < 0 && !photoAddr) {
+      for (let i = 2; i < readData.values.length; i++) {
+        const rowBldg = (readData.values[i][1] || '').toString().trim();
+        if (photoBldg && rowBldg === photoBldg) { bestRow = i; break; }
+      }
+    }
 
     if (bestRow < 0) return { matched: false, reason: 'No matching row for address=' + address + ' bldg=' + bldgNumber + ' category=' + category };
-
-    // Build gallery link
-    const addr = photoAddr;
-    const cat = (category || '').toString().trim();
-    const params = new URLSearchParams();
-    if (addr) params.set('address', addr);
-    if (cat) params.set('category', cat);
-    const galleryUrl = 'https://fairway-walkthrough.netlify.app/photos.html?' + params.toString();
-
-    const displayLabel = 'Photos' + (addr ? ' ' + addr : '') + (cat ? ' ' + cat : '');
-    const cellValue = '=HYPERLINK("' + galleryUrl.replace(/"/g, '""') + '","' + displayLabel.replace(/"/g, '""') + '")';
 
     const rowNum = bestRow + 1;
     const writeRange = `'${SHEET_TAB}'!J${rowNum}`;
@@ -114,7 +121,7 @@ async function addPhotoUrlToSheet(photoUrl, address, bldgNumber, category) {
     });
     const writeData = await writeResp.json();
     if (writeData.error) return { matched: false, reason: JSON.stringify(writeData.error) };
-    return { matched: true, row: rowNum, updatedRange: writeData.updatedRange };
+    return { matched: true, row: rowNum, method: 'fallback' };
   } catch (e) {
     return { matched: false, reason: e.message };
   }
@@ -152,24 +159,24 @@ export default async (req, context) => {
   if (req.method === "POST") {
     try {
       const body = await req.json();
-      const { photoName, fileBase64, fileMimeType, address, bldgNumber, category, description, reviewer, timestamp } = body;
+      const { photoName, fileBase64, fileMimeType, address, bldgNumber, category, description, reviewer, timestamp, rowNumber } = body;
       if (!fileBase64 || !photoName) {
         return new Response(JSON.stringify({ error: "Missing fileBase64 or photoName" }), { status: 400, headers: { "Content-Type": "application/json" } });
       }
       const binary = Uint8Array.from(atob(fileBase64), c => c.charCodeAt(0));
       const store = getStore("photos");
       await store.set(photoName, binary);
-      const photoUrl = "https://fairway-walkthrough.netlify.app/api/photos?key=" + encodeURIComponent(photoName);
+      const photoUrl = SITE_URL + "/api/photos?key=" + encodeURIComponent(photoName);
       const metaStore = getStore("photo-meta");
       await metaStore.setJSON(photoName, {
         photoName, mimeType: fileMimeType || "image/jpeg",
         address: address || "", bldgNumber: bldgNumber || "",
         category: category || "", description: description || "",
         reviewer: reviewer || "", timestamp: timestamp || new Date().toISOString(),
-        url: photoUrl
+        rowNumber: rowNumber || "", url: photoUrl
       });
 
-      const sheetResult = await addPhotoUrlToSheet(photoUrl, address, bldgNumber, category);
+      const sheetResult = await addPhotoUrlToSheet(photoUrl, address, bldgNumber, category, rowNumber);
 
       return new Response(JSON.stringify({ success: true, photoName, url: photoUrl, sheet: sheetResult }), { headers: { "Content-Type": "application/json" } });
     } catch (err) {
