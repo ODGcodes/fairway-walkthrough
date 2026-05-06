@@ -1,3 +1,4 @@
+
 import { getStore } from "@netlify/blobs";
 import { SignJWT, importPKCS8 } from 'jose';
 
@@ -26,36 +27,6 @@ async function getAccessToken() {
   const data = await resp.json();
   if (!data.access_token) throw new Error('Auth failed');
   return data.access_token;
-}
-
-function findBestRow(sheetRows, photoAddr, photoBldg, photoCat) {
-  // Priority 1: address + category (exact)
-  for (let i = 2; i < sheetRows.length; i++) {
-    const rowAddr = (sheetRows[i][2] || '').toString().trim();
-    const rowCat = (sheetRows[i][6] || '').toString().trim().toLowerCase();
-    if (photoAddr && rowAddr === photoAddr && photoCat && rowCat === photoCat) return i;
-  }
-  // Priority 2: address only
-  for (let i = 2; i < sheetRows.length; i++) {
-    const rowAddr = (sheetRows[i][2] || '').toString().trim();
-    if (photoAddr && rowAddr === photoAddr) return i;
-  }
-  // Priority 3: building + category (only when no address)
-  if (!photoAddr) {
-    for (let i = 2; i < sheetRows.length; i++) {
-      const rowBldg = (sheetRows[i][1] || '').toString().trim();
-      const rowCat = (sheetRows[i][6] || '').toString().trim().toLowerCase();
-      if (photoBldg && rowBldg === photoBldg && photoCat && rowCat === photoCat) return i;
-    }
-  }
-  // Priority 4: building only (only when no address)
-  if (!photoAddr) {
-    for (let i = 2; i < sheetRows.length; i++) {
-      const rowBldg = (sheetRows[i][1] || '').toString().trim();
-      if (photoBldg && rowBldg === photoBldg) return i;
-    }
-  }
-  return -1;
 }
 
 export default async (req, context) => {
@@ -91,49 +62,98 @@ export default async (req, context) => {
       body: JSON.stringify({}),
     });
 
-    // Step 4: Match each photo to a row and track which rows get photos
-    const rowPhotos = {}; // rowIndex -> { addr, cat }
-    let matched = 0, unmatched = 0;
-    const unmatchedList = [];
+    // Step 4: Build a set of all photo address+category combinations
+    // Also build a set of all photo bldg+category combinations (for photos with no address)
+    const photoAddrCats = new Map(); // "addr|cat" -> { addr, cat, count }
+    const photoBldgCats = new Map(); // "bldg|cat" -> { bldg, cat, count } (only when no addr)
 
     for (const photo of photos) {
-      const photoAddr = (photo.address || '').toString().trim();
-      const photoBldg = (photo.bldgNumber || '').toString().trim();
-      const photoCat = (photo.category || '').toString().trim().toLowerCase();
+      const addr = (photo.address || '').toString().trim();
+      const bldg = (photo.bldgNumber || '').toString().trim();
+      const cat = (photo.category || '').toString().trim();
 
-      // If photo has rowNumber in metadata, use it directly
-      if (photo.rowNumber && parseInt(photo.rowNumber) > 0) {
-        const rowIdx = parseInt(photo.rowNumber) - 1;
-        if (!rowPhotos[rowIdx]) rowPhotos[rowIdx] = { addr: photoAddr, cat: photo.category || '' };
-        matched++;
-        continue;
-      }
-
-      const bestRow = findBestRow(sheetRows, photoAddr, photoBldg, photoCat);
-      if (bestRow >= 0) {
-        if (!rowPhotos[bestRow]) rowPhotos[bestRow] = { addr: photoAddr, cat: photo.category || '' };
-        matched++;
-      } else {
-        unmatched++;
-        unmatchedList.push({ photoName: photo.photoName, address: photoAddr, bldg: photoBldg, category: photoCat });
+      if (addr && cat) {
+        const key = addr + '|' + cat.toLowerCase();
+        if (!photoAddrCats.has(key)) photoAddrCats.set(key, { addr, cat, count: 0 });
+        photoAddrCats.get(key).count++;
+      } else if (addr) {
+        const key = addr + '|';
+        if (!photoAddrCats.has(key)) photoAddrCats.set(key, { addr, cat: '', count: 0 });
+        photoAddrCats.get(key).count++;
+      } else if (bldg && cat) {
+        const key = bldg + '|' + cat.toLowerCase();
+        if (!photoBldgCats.has(key)) photoBldgCats.set(key, { bldg, cat, count: 0 });
+        photoBldgCats.get(key).count++;
       }
     }
 
-    // Step 5: Write HYPERLINK for each row that has at least one photo
+    // Step 5: For each sheet row, check if there are photos for its address+category
+    // If yes, write a gallery HYPERLINK to column J
     const writes = [];
-    for (const [rowIdx, info] of Object.entries(rowPhotos)) {
-      const rowNum = parseInt(rowIdx) + 1;
-      const addr = (info.addr || '').trim();
-      const cat = (info.cat || '').trim();
-      const params = new URLSearchParams();
-      if (addr) params.set('address', addr);
-      if (cat) params.set('category', cat);
-      const galleryUrl = SITE_URL + '/photos.html?' + params.toString();
-      const displayLabel = 'Photos' + (addr ? ' ' + addr : '') + (cat ? ' ' + cat : '');
-      const cellValue = '=HYPERLINK("' + galleryUrl.replace(/"/g, '""') + '","' + displayLabel.replace(/"/g, '""') + '")';
-      writes.push({ range: `'${SHEET_TAB}'!J${rowNum}`, values: [[cellValue]] });
+    const linkedRows = [];
+    const unlinkedRows = [];
+
+    for (let i = 2; i < sheetRows.length; i++) {
+      const row = sheetRows[i];
+      const rowAddr = (row[2] || '').toString().trim();
+      const rowBldg = (row[1] || '').toString().trim();
+      const rowCat = (row[6] || '').toString().trim();
+      const rowDesc = (row[8] || '').toString().trim();
+      const rowNum = i + 1;
+
+      let matchAddr = '';
+      let matchCat = '';
+      let found = false;
+
+      // Priority 1: exact address + category match
+      if (rowAddr && rowCat) {
+        const key = rowAddr + '|' + rowCat.toLowerCase();
+        if (photoAddrCats.has(key)) {
+          const info = photoAddrCats.get(key);
+          matchAddr = info.addr;
+          matchCat = info.cat;
+          found = true;
+        }
+      }
+
+      // Priority 2: address only match (any category)
+      if (!found && rowAddr) {
+        for (const [key, info] of photoAddrCats) {
+          if (info.addr === rowAddr) {
+            matchAddr = info.addr;
+            matchCat = info.cat;
+            found = true;
+            break;
+          }
+        }
+      }
+
+      // Priority 3: building + category match (only when row has no address)
+      if (!found && !rowAddr && rowBldg && rowCat) {
+        const key = rowBldg + '|' + rowCat.toLowerCase();
+        if (photoBldgCats.has(key)) {
+          const info = photoBldgCats.get(key);
+          matchCat = info.cat;
+          found = true;
+        }
+      }
+
+      if (found) {
+        const params = new URLSearchParams();
+        if (matchAddr) params.set('address', matchAddr);
+        if (matchCat) params.set('category', matchCat);
+        const galleryUrl = SITE_URL + '/photos.html?' + params.toString();
+        const displayLabel = 'Photos' + (matchAddr ? ' ' + matchAddr : '') + (matchCat ? ' ' + matchCat : '');
+        const cellValue = '=HYPERLINK("' + galleryUrl.replace(/"/g, '""') + '","' + displayLabel.replace(/"/g, '""') + '")';
+
+        writes.push({ range: `'${SHEET_TAB}'!J${rowNum}`, values: [[cellValue]] });
+        linkedRows.push({ row: rowNum, addr: rowAddr, cat: rowCat, desc: rowDesc.substring(0, 40) });
+      } else {
+        unlinkedRows.push({ row: rowNum, addr: rowAddr, bldg: rowBldg, cat: rowCat, desc: rowDesc.substring(0, 40) });
+      }
     }
 
+    // Step 6: Batch write all HYPERLINKs
     if (writes.length > 0) {
       const batchResp = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values:batchUpdate`, {
         method: 'POST',
@@ -147,10 +167,11 @@ export default async (req, context) => {
     return new Response(JSON.stringify({
       success: true,
       totalPhotos: photos.length,
-      matched,
-      unmatched,
-      rowsLinked: writes.length,
-      unmatchedPhotos: unmatchedList,
+      totalSheetRows: sheetRows.length - 2,
+      rowsLinked: linkedRows.length,
+      rowsWithNoPhotos: unlinkedRows.length,
+      linkedRows,
+      unlinkedRows,
     }), { headers: { 'Content-Type': 'application/json' } });
   } catch (err) {
     return new Response(JSON.stringify({ error: err.message }), { status: 500, headers: { 'Content-Type': 'application/json' } });
