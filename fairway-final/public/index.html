@@ -170,13 +170,13 @@
       const CATEGORIES=["Owner Resp.","Landscaping","Tree Work","Pavement/Sidewalks","Drainage","Wood Rot","Roof Repair","Power Wash","Miscellaneous"];
       const ALLOWED_REVIEWERS=new Set(["Cindy","Pat","Rick","Dave","Nick","Kathy","Will"]);
       const sessionLog=[];const photoCounter={};
-      // Load existing entries from Google Sheet on page load (last 5 only)
-      async function loadExistingEntries(){
+      // Load existing entries from Google Sheet on page load
+      async function loadExistingEntries(limit){
         try{
           const r=await fetch('/api/review');
           const d=await r.json();
           if(d.entries&&d.entries.length>0){
-            const recent=d.entries.slice(-5);
+            const recent=limit?d.entries.slice(-limit):d.entries.slice(-5);
             recent.forEach(e=>{
               sessionLog.push({
                 address:e['ADDRESS']||e['Address']||'',
@@ -185,6 +185,7 @@
                 description:e['DESCRIPTION']||e['Description']||'',
                 reviewer:e['REVIEWER(S)']||e['Reviewer']||'',
                 timestamp:e['DATE ENTERED']||'',
+                rowNumber:e.rowNumber||'',
                 fromSheet:true
               });
             });
@@ -192,7 +193,7 @@
           }
         }catch(e){console.log('[FW] Could not load existing entries:',e);}
       }
-      function addSessionEntry(e){sessionLog.push({address:e.address||"",bldgNumber:e.bldgNumber||"",category:e.category||"",description:e.description||"",reviewer:e.reviewer||getReviewerFromUrl(),timestamp:e.timestamp||new Date().toISOString()});renderEntryList();}
+      function addSessionEntry(e){sessionLog.push({address:e.address||"",bldgNumber:e.bldgNumber||"",category:e.category||"",description:e.description||"",reviewer:e.reviewer||getReviewerFromUrl(),timestamp:e.timestamp||new Date().toISOString(),rowNumber:e.rowNumber||""});renderEntryList();}
       const statusBanner=document.getElementById("status-banner"),statusText=document.getElementById("status-text"),statusSub=document.getElementById("status-sub"),timerEl=document.getElementById("timer"),startBtn=document.getElementById("start"),stopBtn=document.getElementById("stop"),debugLog=document.getElementById("debug-log"),photoPanel=document.getElementById("photo-panel"),photoEntryList=document.getElementById("photo-entry-list"),photoFileCamera=document.getElementById("photo-file-camera"),photoFileGallery=document.getElementById("photo-file-gallery"),photoPreviewRow=document.getElementById("photo-preview-row"),btnUpload=document.getElementById("btn-upload"),photoStatus=document.getElementById("photo-status"),photoSavedList=document.getElementById("photo-saved-list"),btnShowPhotos=document.getElementById("btn-show-photos"),btnAddEntry=document.getElementById("btn-add-entry"),manualAddress=document.getElementById("manual-address"),manualBldg=document.getElementById("manual-bldg"),manualCategory=document.getElementById("manual-category"),manualDesc=document.getElementById("manual-desc"),photoClose=document.getElementById("photo-close");
       let vapi=null,timerInterval=null,startTime=null,selectedEntryIdx=-1,selectedFiles=[];
       CATEGORIES.forEach(c=>{const o=document.createElement("option");o.value=c;o.textContent=c;manualCategory.appendChild(o);});
@@ -219,12 +220,12 @@
       }
       function renderEntryList(){
         photoEntryList.innerHTML="";
-        sessionLog.forEach((e,i)=>{const li=document.createElement("li");const label=[e.bldgNumber?"Bldg "+e.bldgNumber:"",e.address].filter(Boolean).join(" · ")||"No address";li.innerHTML='<div class="entry-addr">'+label+(e.category?" — "+e.category:"")+'</div><div class="entry-desc">'+(e.description||"")+(e.fromSheet?' (sheet)':'')+'</div>';if(i===selectedEntryIdx)li.classList.add("selected");li.onclick=()=>{selectedEntryIdx=i;renderEntryList();populateFormFromEntry(i);checkUploadReady();};photoEntryList.appendChild(li);});
+        sessionLog.forEach((e,i)=>{const li=document.createElement("li");const label=[e.bldgNumber?"Bldg "+e.bldgNumber:"",e.address].filter(Boolean).join(" · ")||"No address";li.innerHTML='<div class="entry-addr">'+label+(e.category?" — "+e.category:"")+'</div><div class="entry-desc">'+(e.description||"")+(e.rowNumber?' (row '+e.rowNumber+')':'')+'</div>';if(i===selectedEntryIdx)li.classList.add("selected");li.onclick=()=>{selectedEntryIdx=i;renderEntryList();populateFormFromEntry(i);checkUploadReady();};photoEntryList.appendChild(li);});
       }
       function generatePhotoName(e){const cat=(e.category||"General").replace(/[\s\/\.]+/g,""),addr=e.bldgNumber?"Bldg"+String(e.bldgNumber).replace(/\s+/g,""):(e.address||"NoAddr"),rev=e.reviewer||"Unknown",key=cat+"-"+addr;photoCounter[key]=(photoCounter[key]||0)+1;return cat+"-"+addr+"-"+rev+"-"+String(photoCounter[key]).padStart(2,"0");}
       loadExistingEntries();
       function showPhotoPanel(){photoPanel.classList.add("visible");photoFileCamera.value="";photoFileGallery.value="";photoPreviewRow.innerHTML="";selectedFiles=[];btnUpload.disabled=true;photoStatus.textContent="";photoStatus.className="photo-status";
-        // Find last voice entry (not from sheet)
+        // Find last voice entry (not from sheet) to auto-select
         let lastVoiceIdx=-1;
         for(let i=sessionLog.length-1;i>=0;i--){if(!sessionLog[i].fromSheet){lastVoiceIdx=i;break;}}
         const useIdx=lastVoiceIdx>=0?lastVoiceIdx:(sessionLog.length>0?sessionLog.length-1:-1);
@@ -309,7 +310,7 @@
             photoStatus.textContent="Compressing "+fullName+"…";
             const compressed=await compressImage(file);
             photoStatus.textContent="Uploading "+fullName+"…";
-            const resp=await fetch(PHOTO_API,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({photoName:fullName,address:entry.address,bldgNumber:entry.bldgNumber,category:entry.category,description:entry.description,reviewer:entry.reviewer,timestamp:new Date().toISOString(),fileBase64:compressed.b64,fileMimeType:compressed.mime})});
+            const resp=await fetch(PHOTO_API,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({photoName:fullName,address:entry.address,bldgNumber:entry.bldgNumber,category:entry.category,description:entry.description,reviewer:entry.reviewer,rowNumber:entry.rowNumber||"",timestamp:new Date().toISOString(),fileBase64:compressed.b64,fileMimeType:compressed.mime})});
             if(resp.ok){ok++;const result=await resp.json();const div=document.createElement("div");div.innerHTML='✅ <span class="saved-name">'+fullName+'</span>'+(result.sheet&&result.sheet.matched?' (linked to row '+result.sheet.row+')':' (not linked to sheet)');photoSavedList.appendChild(div);}
             else{fail++;const err=await resp.text();log("Upload fail "+fullName+": "+err);const div=document.createElement("div");div.innerHTML='❌ <span style="color:var(--red)">'+fullName+' failed</span>';photoSavedList.appendChild(div);}
           }catch(err){fail++;log("Upload error: "+(err?.message||err));const div=document.createElement("div");div.innerHTML='❌ <span style="color:var(--red)">Error: '+(err?.message||'unknown')+'</span>';photoSavedList.appendChild(div);}
@@ -322,7 +323,13 @@
       try{
         const V=window.Vapi||(typeof Vapi!=="undefined"?Vapi:null);if(!V)throw new Error("Vapi SDK did not load.");vapi=new V(PUBLIC_KEY);
         vapi.on("call-start",()=>{setStatus("listening","Listening…","Describe what you see");startBtn.disabled=true;stopBtn.disabled=false;debugLog.classList.remove("visible");debugLog.textContent="";startTimer();});
-        vapi.on("call-end",()=>{setStatus("","Done!","Session ended — add photos below if needed");startBtn.disabled=false;stopBtn.disabled=true;stopTimer();timerEl.textContent="";});
+        vapi.on("call-end",()=>{setStatus("","Done!","Session ended — add photos below if needed");startBtn.disabled=false;stopBtn.disabled=true;stopTimer();timerEl.textContent="";
+          // Reload entries from sheet to get rowNumbers for voice-captured entries
+          setTimeout(()=>{
+            sessionLog.length=0;selectedEntryIdx=-1;
+            loadExistingEntries(50);
+          },2000);
+        });
         vapi.on("message",msg=>{try{let calls=[];if(msg?.type==="tool-calls"&&Array.isArray(msg.toolCalls))calls=msg.toolCalls;else if(msg?.type==="function-call"&&msg.functionCall)calls=[msg.functionCall];calls.forEach(call=>{const n=call.name||call.function?.name||"";if(n==="append_walkthrough_row"){const raw=call.parameters||call.function?.arguments||call.arguments||{};const a=typeof raw==="string"?JSON.parse(raw):raw;addSessionEntry({address:a.address||"",bldgNumber:a.bldgNumber||"",category:a.majorCategory||a.minorCategory||a.category||"",description:a.descriptionActionNeeded||a.description||"",reviewer:a.reviewPerson||getReviewerFromUrl()});console.log("[FW] Auto-captured:",sessionLog[sessionLog.length-1]);}});}catch(e){console.warn("[FW] msg parse:",e);}});
         vapi.on("error",e=>{
           const msg=e?.message||e?.errorMsg||JSON.stringify(e);
