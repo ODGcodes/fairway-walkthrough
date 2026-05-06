@@ -30,54 +30,76 @@ async function getAccessToken() {
 async function addPhotoUrlToSheet(photoUrl, address, bldgNumber, category) {
   try {
     const token = await getAccessToken();
-    // Read columns A-J to find matching row (Date Entered is now col A, so everything shifted right by 1)
     const range = encodeURIComponent(`'${SHEET_TAB}'!A:J`);
     const readUrl = `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/${range}?majorDimension=ROWS`;
     const readResp = await fetch(readUrl, { headers: { 'Authorization': `Bearer ${token}` } });
     const readData = await readResp.json();
     if (!readData.values) return { matched: false, reason: 'No data in sheet' };
 
-    // Find matching row by address + category (primary) or building + category (secondary)
     // Column layout: A=Date, B=Bldg, C=Address, D=Location, E=Reviewer, F=Rank, G=Category, H=Op/Res, I=Description, J=Photos
-    let bestRow = -1;
+    const photoAddr = (address || '').toString().trim();
+    const photoBldg = (bldgNumber || '').toString().trim();
+    const photoCat = (category || '').toString().trim().toLowerCase();
+
+    // Match priority:
+    // 1. address + category (exact, best match)
+    // 2. address only (address matches but category doesn't)
+    // 3. building + category (ONLY when photo has NO address)
+    // 4. building only (ONLY when photo has NO address)
+    let addrCatMatch = -1;
     let addrOnlyMatch = -1;
+    let bldgCatMatch = -1;
+    let bldgOnlyMatch = -1;
+
     for (let i = 2; i < readData.values.length; i++) {
       const row = readData.values[i];
-      const rowBldg = (row[1] || '').toString().trim();   // B = Bldg
-      const rowAddr = (row[2] || '').toString().trim();    // C = Address
-      const rowCat = (row[6] || '').toString().trim();     // G = Category
-      const rowPhoto = (row[9] || '').toString().trim();   // J = Photos
+      const rowBldg = (row[1] || '').toString().trim();
+      const rowAddr = (row[2] || '').toString().trim();
+      const rowCat = (row[6] || '').toString().trim().toLowerCase();
 
-      // Check address or building match
-      const addrMatch = address && rowAddr && rowAddr === address.toString().trim();
-      const bldgMatch = bldgNumber && rowBldg && rowBldg === bldgNumber.toString().trim();
+      const addrMatch = photoAddr && rowAddr && rowAddr === photoAddr;
+      const bldgMatch = photoBldg && rowBldg && rowBldg === photoBldg;
+      const catMatch = photoCat && rowCat && rowCat === photoCat;
 
-      if (addrMatch || bldgMatch) {
-        // Check category match
-        const catMatch = category && rowCat && rowCat.toLowerCase() === category.toString().trim().toLowerCase();
+      // Priority 1: address + category (stop looking)
+      if (addrMatch && catMatch) {
+        addrCatMatch = i;
+        break;
+      }
 
-        if (catMatch) {
-          bestRow = i;
-          break; // address + category = exact match, stop looking
-        }
-        // Track first address-only match as fallback
-        if (addrOnlyMatch < 0) addrOnlyMatch = i;
+      // Priority 2: address only (first match)
+      if (addrMatch && addrOnlyMatch < 0) {
+        addrOnlyMatch = i;
+      }
+
+      // Priority 3: building + category (ONLY when photo has no address)
+      if (!photoAddr && bldgMatch && catMatch && bldgCatMatch < 0) {
+        bldgCatMatch = i;
+      }
+
+      // Priority 4: building only (ONLY when photo has no address)
+      if (!photoAddr && bldgMatch && bldgOnlyMatch < 0) {
+        bldgOnlyMatch = i;
       }
     }
 
-    // Use address+category match if found, otherwise fall back to address-only
-    if (bestRow < 0) bestRow = addrOnlyMatch;
+    // Pick best match in priority order
+    let bestRow = -1;
+    if (addrCatMatch >= 0) bestRow = addrCatMatch;
+    else if (addrOnlyMatch >= 0) bestRow = addrOnlyMatch;
+    else if (bldgCatMatch >= 0) bestRow = bldgCatMatch;
+    else if (bldgOnlyMatch >= 0) bestRow = bldgOnlyMatch;
+
     if (bestRow < 0) return { matched: false, reason: 'No matching row for address=' + address + ' bldg=' + bldgNumber + ' category=' + category };
 
     // Build gallery link
-    const addr = (address || '').toString().trim();
+    const addr = photoAddr;
     const cat = (category || '').toString().trim();
     const params = new URLSearchParams();
     if (addr) params.set('address', addr);
     if (cat) params.set('category', cat);
     const galleryUrl = 'https://fairway-walkthrough.netlify.app/photos.html?' + params.toString();
 
-    // Write HYPERLINK formula with short display label (no emojis in formulas — they can break)
     const displayLabel = 'Photos' + (addr ? ' ' + addr : '') + (cat ? ' ' + cat : '');
     const cellValue = '=HYPERLINK("' + galleryUrl.replace(/"/g, '""') + '","' + displayLabel.replace(/"/g, '""') + '")';
 
@@ -146,7 +168,6 @@ export default async (req, context) => {
         url: photoUrl
       });
 
-      // Write photo URL directly to Google Sheet column I (matching by address/bldg)
       const sheetResult = await addPhotoUrlToSheet(photoUrl, address, bldgNumber, category);
 
       return new Response(JSON.stringify({ success: true, photoName, url: photoUrl, sheet: sheetResult }), { headers: { "Content-Type": "application/json" } });
