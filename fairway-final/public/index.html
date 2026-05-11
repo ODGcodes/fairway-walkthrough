@@ -173,10 +173,17 @@
       // Load existing entries from Google Sheet on page load
       async function loadExistingEntries(limit){
         try{
+          const reviewer=getReviewerFromUrl();
           const r=await fetch('/api/review');
           const d=await r.json();
           if(d.entries&&d.entries.length>0){
-            const recent=limit?d.entries.slice(-limit):d.entries.slice(-5);
+            // Filter to current reviewer only
+            const myEntries=reviewer?d.entries.filter(e=>{
+              const rev=(e['REVIEWER(S)']||e['Reviewer']||'').trim();
+              return rev.toLowerCase()===reviewer.toLowerCase();
+            }):d.entries;
+            const maxEntries=limit||6;
+            const recent=myEntries.slice(-maxEntries);
             recent.forEach(e=>{
               sessionLog.push({
                 address:e['ADDRESS']||e['Address']||'',
@@ -327,7 +334,7 @@
           // Reload entries from sheet to get rowNumbers for voice-captured entries
           setTimeout(()=>{
             sessionLog.length=0;selectedEntryIdx=-1;
-            loadExistingEntries(50);
+            loadExistingEntries(6);
           },2000);
         });
         vapi.on("message",msg=>{try{let calls=[];if(msg?.type==="tool-calls"&&Array.isArray(msg.toolCalls))calls=msg.toolCalls;else if(msg?.type==="function-call"&&msg.functionCall)calls=[msg.functionCall];calls.forEach(call=>{const n=call.name||call.function?.name||"";if(n==="append_walkthrough_row"){const raw=call.parameters||call.function?.arguments||call.arguments||{};const a=typeof raw==="string"?JSON.parse(raw):raw;addSessionEntry({address:a.address||"",bldgNumber:a.bldgNumber||"",category:a.majorCategory||a.minorCategory||a.category||"",description:a.descriptionActionNeeded||a.description||"",reviewer:a.reviewPerson||getReviewerFromUrl()});console.log("[FW] Auto-captured:",sessionLog[sessionLog.length-1]);}});}catch(e){console.warn("[FW] msg parse:",e);}});
