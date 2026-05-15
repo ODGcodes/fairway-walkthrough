@@ -201,6 +201,28 @@
         }catch(e){console.log('[FW] Could not load existing entries:',e);}
       }
       function addSessionEntry(e){sessionLog.push({address:e.address||"",bldgNumber:e.bldgNumber||"",category:e.category||"",description:e.description||"",reviewer:e.reviewer||getReviewerFromUrl(),timestamp:e.timestamp||new Date().toISOString(),rowNumber:e.rowNumber||""});renderEntryList();}
+      // Background fetch to get rowNumber for a just-logged entry
+      async function fetchRowNumber(entryIdx){
+        try{
+          const r=await fetch('/api/review');const d=await r.json();
+          if(d.entries&&d.entries.length>0){
+            const entry=sessionLog[entryIdx];if(!entry)return;
+            // Find matching entry from the end of the sheet (most recent first)
+            for(let i=d.entries.length-1;i>=0;i--){
+              const se=d.entries[i];
+              const seAddr=(se['ADDRESS']||se['Address']||'').trim();
+              const seCat=(se['CATEGORY']||se['Category']||'').trim().toLowerCase();
+              const seDesc=(se['DESCRIPTION']||se['Description']||'').trim().toLowerCase();
+              if(seAddr===entry.address&&seCat===(entry.category||'').toLowerCase()){
+                sessionLog[entryIdx].rowNumber=se.rowNumber||'';
+                console.log('[FW] Got rowNumber',se.rowNumber,'for entry',entryIdx);
+                renderEntryList();
+                break;
+              }
+            }
+          }
+        }catch(e){console.log('[FW] fetchRowNumber error:',e);}
+      }
       const statusBanner=document.getElementById("status-banner"),statusText=document.getElementById("status-text"),statusSub=document.getElementById("status-sub"),timerEl=document.getElementById("timer"),startBtn=document.getElementById("start"),stopBtn=document.getElementById("stop"),debugLog=document.getElementById("debug-log"),photoPanel=document.getElementById("photo-panel"),photoEntryList=document.getElementById("photo-entry-list"),photoFileCamera=document.getElementById("photo-file-camera"),photoFileGallery=document.getElementById("photo-file-gallery"),photoPreviewRow=document.getElementById("photo-preview-row"),btnUpload=document.getElementById("btn-upload"),photoStatus=document.getElementById("photo-status"),photoSavedList=document.getElementById("photo-saved-list"),btnShowPhotos=document.getElementById("btn-show-photos"),btnAddEntry=document.getElementById("btn-add-entry"),manualAddress=document.getElementById("manual-address"),manualBldg=document.getElementById("manual-bldg"),manualCategory=document.getElementById("manual-category"),manualDesc=document.getElementById("manual-desc"),photoClose=document.getElementById("photo-close");
       let vapi=null,timerInterval=null,startTime=null,selectedEntryIdx=-1,selectedFiles=[];
       CATEGORIES.forEach(c=>{const o=document.createElement("option");o.value=c;o.textContent=c;manualCategory.appendChild(o);});
@@ -340,7 +362,7 @@
             loadExistingEntries(6);
           },2000);
         });
-        vapi.on("message",msg=>{try{let calls=[];if(msg?.type==="tool-calls"&&Array.isArray(msg.toolCalls))calls=msg.toolCalls;else if(msg?.type==="function-call"&&msg.functionCall)calls=[msg.functionCall];calls.forEach(call=>{const n=call.name||call.function?.name||"";if(n==="append_walkthrough_row"){const raw=call.parameters||call.function?.arguments||call.arguments||{};const a=typeof raw==="string"?JSON.parse(raw):raw;addSessionEntry({address:a.address||"",bldgNumber:a.bldgNumber||"",category:a.majorCategory||a.minorCategory||a.category||"",description:a.descriptionActionNeeded||a.description||"",reviewer:a.reviewPerson||getReviewerFromUrl()});console.log("[FW] Auto-captured:",sessionLog[sessionLog.length-1]);}});}catch(e){console.warn("[FW] msg parse:",e);}});
+        vapi.on("message",msg=>{try{let calls=[];if(msg?.type==="tool-calls"&&Array.isArray(msg.toolCalls))calls=msg.toolCalls;else if(msg?.type==="function-call"&&msg.functionCall)calls=[msg.functionCall];calls.forEach(call=>{const n=call.name||call.function?.name||"";if(n==="append_walkthrough_row"){const raw=call.parameters||call.function?.arguments||call.arguments||{};const a=typeof raw==="string"?JSON.parse(raw):raw;addSessionEntry({address:a.address||"",bldgNumber:a.bldgNumber||"",category:a.majorCategory||a.minorCategory||a.category||"",description:a.descriptionActionNeeded||a.description||"",reviewer:a.reviewPerson||getReviewerFromUrl()});console.log("[FW] Auto-captured:",sessionLog[sessionLog.length-1]);setTimeout(()=>fetchRowNumber(sessionLog.length-1),1500);}});}catch(e){console.warn("[FW] msg parse:",e);}});
         vapi.on("error",e=>{
           const msg=e?.message||e?.errorMsg||JSON.stringify(e);
           // Ignore "room deleted" / "meeting ended" errors — these are normal after the call ends
@@ -389,11 +411,19 @@
       const prefillAddr=urlParams.get('photoAddr');
       const prefillBldg=urlParams.get('photoBldg');
       const prefillCat=urlParams.get('photoCat');
-      if(prefillAddr||prefillBldg||prefillCat||window.location.hash==='#photo'){
+      const prefillRow=urlParams.get('photoRow');
+      const prefillDesc=urlParams.get('photoDesc')?decodeURIComponent(urlParams.get('photoDesc')):'';
+      if(prefillAddr||prefillBldg||prefillCat||prefillRow||window.location.hash==='#photo'){
         setTimeout(()=>{
           if(prefillAddr)manualAddress.value=prefillAddr;
           if(prefillBldg)manualBldg.value=prefillBldg;
           if(prefillCat)manualCategory.value=prefillCat;
+          if(prefillDesc)manualDesc.value=prefillDesc;
+          // Create an entry in sessionLog with rowNumber so the upload links to the exact row
+          if(prefillRow||prefillAddr||prefillBldg){
+            addSessionEntry({address:prefillAddr||'',bldgNumber:prefillBldg||'',category:prefillCat||'',description:prefillDesc||'',rowNumber:prefillRow||''});
+            selectedEntryIdx=sessionLog.length-1;
+          }
           showPhotoPanel();
         },500);
       }
