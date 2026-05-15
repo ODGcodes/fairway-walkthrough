@@ -279,9 +279,26 @@
       manualBldg.oninput=checkUploadReady;
       manualCategory.onchange=checkUploadReady;
       manualDesc.oninput=checkUploadReady;
-      // Compress image — always uses canvas for maximum compatibility with mobile photo formats
+      // Compress image to stay under Netlify's ~4.5MB payload limit
       function compressImage(file, maxWidth=1200, quality=0.75){
         return new Promise((resolve,reject)=>{
+          // For files under 2MB, read directly — this is the most reliable path for gallery photos
+          if(file.size < 2*1024*1024){
+            const reader=new FileReader();
+            reader.onload=()=>resolve({b64:reader.result.split(',')[1], mime:file.type||'image/jpeg'});
+            reader.onerror=()=>{
+              // Fallback: try arrayBuffer if FileReader fails
+              file.arrayBuffer().then(buf=>{
+                const bytes=new Uint8Array(buf);
+                const chunks=[];
+                for(let i=0;i<bytes.length;i+=8192){chunks.push(String.fromCharCode.apply(null,bytes.subarray(i,i+8192)));}
+                resolve({b64:btoa(chunks.join('')), mime:file.type||'image/jpeg'});
+              }).catch(()=>reject(new Error('Cannot read this photo. Try taking a new one with the camera.')));
+            };
+            reader.readAsDataURL(file);
+            return;
+          }
+          // For large files, compress via canvas
           const img=new Image();
           const objectUrl=URL.createObjectURL(file);
           img.onload=()=>{
@@ -301,18 +318,11 @@
           };
           img.onerror=()=>{
             URL.revokeObjectURL(objectUrl);
-            // Fallback: try reading file directly with arrayBuffer (handles formats canvas can't)
-            file.arrayBuffer().then(buf=>{
-              const bytes=new Uint8Array(buf);
-              let binary='';for(let i=0;i<bytes.length;i++)binary+=String.fromCharCode(bytes[i]);
-              resolve({b64:btoa(binary), mime:file.type||'image/jpeg'});
-            }).catch(()=>{
-              // Last resort: FileReader
-              const reader=new FileReader();
-              reader.onload=()=>resolve({b64:reader.result.split(',')[1], mime:file.type||'image/jpeg'});
-              reader.onerror=()=>reject(new Error('Cannot read this photo. Try taking a new photo with the camera instead.'));
-              reader.readAsDataURL(file);
-            });
+            // Fallback for large files: read directly
+            const reader=new FileReader();
+            reader.onload=()=>resolve({b64:reader.result.split(',')[1], mime:file.type||'image/jpeg'});
+            reader.onerror=()=>reject(new Error('Cannot read this photo. Try taking a new one with the camera.'));
+            reader.readAsDataURL(file);
           };
           img.src=objectUrl;
         });
