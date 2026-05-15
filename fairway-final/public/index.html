@@ -281,24 +281,35 @@
       manualDesc.oninput=checkUploadReady;
       // Compress image to stay under Netlify's ~4.5MB payload limit
       function compressImage(file, maxWidth=1200, quality=0.75){
+        // Show file details for debugging
+        console.log('[FW] compressImage:', file.name, 'type:', file.type, 'size:', file.size);
+        photoStatus.textContent='Reading '+file.name+' ('+Math.round(file.size/1024)+'KB, '+file.type+')...';
         return new Promise((resolve,reject)=>{
-          // For files under 2MB, read directly — this is the most reliable path for gallery photos
+          // If file is already small enough (<2MB), skip compression
           if(file.size < 2*1024*1024){
             const reader=new FileReader();
-            reader.onload=()=>resolve({b64:reader.result.split(',')[1], mime:file.type||'image/jpeg'});
-            reader.onerror=()=>{
-              // Fallback: try arrayBuffer if FileReader fails
+            reader.onload=()=>{
+              console.log('[FW] FileReader success, result length:', reader.result?.length);
+              resolve({b64:reader.result.split(',')[1], mime:file.type||'image/jpeg'});
+            };
+            reader.onerror=(err)=>{
+              console.log('[FW] FileReader failed:', err, reader.error);
+              // Fallback: try arrayBuffer
               file.arrayBuffer().then(buf=>{
+                console.log('[FW] arrayBuffer success, size:', buf.byteLength);
                 const bytes=new Uint8Array(buf);
                 const chunks=[];
                 for(let i=0;i<bytes.length;i+=8192){chunks.push(String.fromCharCode.apply(null,bytes.subarray(i,i+8192)));}
                 resolve({b64:btoa(chunks.join('')), mime:file.type||'image/jpeg'});
-              }).catch(()=>reject(new Error('Cannot read this photo. Try taking a new one with the camera.')));
+              }).catch(e2=>{
+                console.log('[FW] arrayBuffer also failed:', e2);
+                reject(new Error('Cannot read file. Name: '+file.name+' Type: '+file.type+' Size: '+file.size+' Error: '+(reader.error?.message||'unknown')));
+              });
             };
             reader.readAsDataURL(file);
             return;
           }
-          // For large files, compress via canvas
+          // Try canvas compression
           const img=new Image();
           const objectUrl=URL.createObjectURL(file);
           img.onload=()=>{
@@ -307,21 +318,22 @@
               if(w>maxWidth){h=Math.round(h*(maxWidth/w));w=maxWidth;}
               const canvas=document.createElement('canvas');
               canvas.width=w;canvas.height=h;
-              canvas.getContext('2d').drawImage(img,0,0,w,h);
+              const ctx=canvas.getContext('2d');
+              ctx.drawImage(img,0,0,w,h);
               const dataUrl=canvas.toDataURL('image/jpeg',quality);
               URL.revokeObjectURL(objectUrl);
               resolve({b64:dataUrl.split(',')[1], mime:'image/jpeg'});
             }catch(e){
               URL.revokeObjectURL(objectUrl);
-              reject(new Error('Compression failed: '+e.message));
+              reject(new Error('Canvas compression failed: '+e.message));
             }
           };
           img.onerror=()=>{
             URL.revokeObjectURL(objectUrl);
-            // Fallback for large files: read directly
+            // Fallback: try reading as base64 directly
             const reader=new FileReader();
             reader.onload=()=>resolve({b64:reader.result.split(',')[1], mime:file.type||'image/jpeg'});
-            reader.onerror=()=>reject(new Error('Cannot read this photo. Try taking a new one with the camera.'));
+            reader.onerror=()=>reject(new Error('Cannot read image. Type: '+file.type+' Size: '+file.size));
             reader.readAsDataURL(file);
           };
           img.src=objectUrl;
